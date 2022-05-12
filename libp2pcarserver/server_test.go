@@ -6,8 +6,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io/ioutil"
+	"os"
 	"testing"
 	"time"
+
+	bstore "github.com/ipfs/go-ipfs-blockstore"
+	"github.com/ipld/go-car"
+
+	"github.com/filecoin-project/saturn-l2/store"
 
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 
@@ -28,7 +34,9 @@ func TestSimpleTransfer(t *testing.T) {
 	require.NoError(t, err)
 	p2, err := mn.GenPeer()
 	require.NoError(t, err)
-	l := New(p2)
+	cs, err := store.NewCARStore(t.TempDir())
+	require.NoError(t, err)
+	l := New(p2, cs)
 	l.Start()
 
 	require.NoError(t, mn.LinkAll())
@@ -36,19 +44,35 @@ func TestSimpleTransfer(t *testing.T) {
 	p1.Peerstore().AddAddrs(p2.ID(), p2.Addrs(), 1*time.Hour)
 	require.NoError(t, p1.Connect(ctx, peer.AddrInfo{ID: p2.ID()}))
 
-	s, err := p1.NewStream(ctx, p2.ID(), CarTransferProtocol)
+	s, err := p1.NewStream(ctx, p2.ID(), CARTransferProtocol)
 	require.NoError(t, err)
 
 	from, err := blockstore.OpenReadOnly("../testdata/files/sample-v1.car")
 	require.NoError(t, err)
 	rts, err := from.Roots()
 	require.NoError(t, err)
+	require.NoError(t, from.Close())
+	// add the car file to the car store
+	require.NoError(t, cs.Create(rts[0], rts[0], func(bs bstore.Blockstore) error {
+		f, err := os.Open("../testdata/files/sample-v1.car")
+		if err != nil {
+			return err
+		}
+		if _, err := car.LoadCar(ctx, bs, f); err != nil {
+			return err
+		}
+		if err := f.Close(); err != nil {
+			return err
+		}
+		return nil
+	}))
+
 	rtbz := rts[0].Bytes()
 
 	bf := bytes.Buffer{}
 	require.NoError(t, dagcbor.Encode(selectorparse.CommonSelector_ExploreAllRecursively, &bf))
 
-	req := CarTransferRequest{
+	req := CARTransferRequest{
 		Root:     base64.StdEncoding.EncodeToString(rtbz),
 		Selector: base64.StdEncoding.EncodeToString(bf.Bytes()),
 	}
