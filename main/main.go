@@ -1,29 +1,36 @@
 package main
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
 )
 
 func main() {
-	if len(os.Args) != 2 {
-		panic(errors.New("need only one arguement i.e. the port number"))
+	var port int
+	portStr := os.Getenv("PORT")
+	if portStr == "" {
+		port = 5500
+	} else {
+		var err error
+		port, err = strconv.Atoi(portStr)
+		if err != nil {
+			panic(fmt.Errorf("Invalid PORT value '%s': %s", portStr, err.Error()))
+		}
 	}
 
 	m := mux.NewRouter()
-	m.Handle("/hello", http.HandlerFunc(hello))
+	m.Handle("/webui", http.HandlerFunc(webuiIndex))
 	srv := &http.Server{
 		Handler: m,
 	}
 
-	nl, err := net.Listen("tcp", fmt.Sprintf(":%s", os.Args[1]))
+	nl, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		panic(err)
 	}
@@ -35,27 +42,16 @@ func main() {
 	}()
 
 	time.Sleep(1 * time.Second)
+	port = nl.Addr().(*net.TCPAddr).Port
 	fmt.Println("Server listening on", nl.Addr())
+	fmt.Printf("WebUI: http://localhost:%d/webui\n", port)
 	for {
 
 	}
 }
 
-type Hello struct {
-	Age  int
-	Name string
-}
-
-func hello(w http.ResponseWriter, req *http.Request) {
-	rsp := &Hello{
-		Age:  25,
-		Name: "BajtosTheGreat",
-	}
-
-	bz, err := json.Marshal(&rsp)
-	if err != nil {
-		panic(err)
-	}
+func webuiIndex(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(200)
-	w.Write(bz)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, "<html><head><title>Saturn L2 Node</title></head><body>Status: running</body></html>")
 }
