@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -41,7 +40,6 @@ func main() {
 		}
 	}()
 
-	time.Sleep(1 * time.Second)
 	port = nl.Addr().(*net.TCPAddr).Port
 	fmt.Println("Server listening on", nl.Addr())
 	fmt.Printf("WebUI: http://localhost:%d/webui\n", port)
