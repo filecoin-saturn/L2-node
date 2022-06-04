@@ -10,6 +10,8 @@ import (
 	"github.com/gorilla/mux"
 )
 
+var filAddr string
+
 func main() {
 	var port int
 	portStr := os.Getenv("PORT")
@@ -21,6 +23,11 @@ func main() {
 		if err != nil {
 			panic(fmt.Errorf("Invalid PORT value '%s': %s", portStr, err.Error()))
 		}
+	}
+
+	filAddr = os.Getenv("FIL_ADDRESS")
+	if filAddr == "" {
+		panic(fmt.Errorf("no FIL_ADDRESS provided"))
 	}
 
 	m := mux.NewRouter()
@@ -51,5 +58,5 @@ func main() {
 func webuiIndex(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(200)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprint(w, "<html><head><title>Saturn L2 Node</title></head><body>Status: running</body></html>")
+	fmt.Fprintf(w, "<html><head><title>Saturn L2 Node</title></head><body><div>Status: running</div><div>Filecoin Address: %s</div></body></html>", filAddr)
 }
