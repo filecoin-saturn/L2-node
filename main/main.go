@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -12,6 +14,10 @@ import (
 
 	"github.com/filecoin-project/saturn-l2/resources"
 )
+
+type config struct {
+	FilAddr string `json:"fil_wallet_address"`
+}
 
 func main() {
 	var port int
@@ -26,8 +32,19 @@ func main() {
 		}
 	}
 
+	filAddr := os.Getenv("FIL_WALLET_ADDRESS")
+	if filAddr == "" {
+		panic(fmt.Errorf("no FIL_WALLET_ADDRESS provided"))
+	}
+	conf, err := json.Marshal(config{FilAddr: filAddr})
+	if err != nil {
+		panic(errors.New("failed to serialize config"))
+	}
+
 	m := mux.NewRouter()
+	m.PathPrefix("/config").Handler(http.HandlerFunc(configHandler(conf)))
 	m.PathPrefix("/webui").Handler(http.HandlerFunc(webuiHandler))
+
 	srv := &http.Server{
 		Handler: m,
 	}
@@ -74,4 +91,12 @@ func webuiHandler(w http.ResponseWriter, r *http.Request) {
 
 	// otherwise, use http.FileServer to serve the static dir
 	http.FileServer(http.FS(resources.WebUI)).ServeHTTP(w, r)
+}
+
+func configHandler(conf []byte) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write(conf)
+	}
 }
