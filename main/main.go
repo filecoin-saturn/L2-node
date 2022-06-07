@@ -6,8 +6,11 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
+
+	"github.com/filecoin-project/saturn-l2/resources"
 )
 
 func main() {
@@ -24,7 +27,7 @@ func main() {
 	}
 
 	m := mux.NewRouter()
-	m.Handle("/webui", http.HandlerFunc(webuiIndex))
+	m.PathPrefix("/webui").Handler(http.HandlerFunc(webuiHandler))
 	srv := &http.Server{
 		Handler: m,
 	}
@@ -48,8 +51,27 @@ func main() {
 	}
 }
 
-func webuiIndex(w http.ResponseWriter, req *http.Request) {
-	w.WriteHeader(200)
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprint(w, "<html><head><title>Saturn L2 Node</title></head><body>Status: running</body></html>")
+func webuiHandler(w http.ResponseWriter, r *http.Request) {
+	rootDir := "webui"
+	path := strings.TrimPrefix(r.URL.Path, "/")
+
+	_, err := resources.WebUI.Open(path)
+	if path == rootDir || os.IsNotExist(err) {
+		// file does not exist, serve index.html
+		index, err := resources.WebUI.ReadFile(rootDir + "/index.html")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write(index)
+		return
+	} else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// otherwise, use http.FileServer to serve the static dir
+	http.FileServer(http.FS(resources.WebUI)).ServeHTTP(w, r)
 }
