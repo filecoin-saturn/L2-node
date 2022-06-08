@@ -1,26 +1,29 @@
-package libp2pcarserver
+package carserver
 
 import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
 
-	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime"
+	cid "github.com/ipfs/go-cid"
+	ipld "github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 )
 
 // CARTransferRequest is the request sent by the client to transfer a CAR file
-// for the given root and selector
+// for the given root and selector.
 type CARTransferRequest struct {
-	Root     string // base64 encoded byte array
-	Selector string // base 64 encoded byte array
+	UUID       string
+	Root       string // base64 encoded byte array
+	Selector   string // base 64 encoded byte array
+	SkipOffset uint64
 }
 
 type dagTraversalRequest struct {
 	root     cid.Cid
 	selector ipld.Node
+	skip     uint64
 }
 
 func carRequestToDAGRequest(req *CARTransferRequest) (*dagTraversalRequest, error) {
@@ -45,6 +48,7 @@ func carRequestToDAGRequest(req *CARTransferRequest) (*dagTraversalRequest, erro
 	return &dagTraversalRequest{
 		root:     rootcid,
 		selector: sel,
+		skip:     req.SkipOffset,
 	}, nil
 }
 
