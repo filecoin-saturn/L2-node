@@ -1,0 +1,57 @@
+name: goreleaser
+
+on:
+  push:
+    # run only against tags
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+  # packages: write
+  # issues: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      -
+        name: Include web UI
+        uses: robinraju/release-downloader@v1.3
+        with:
+          repository: filecoin-project/saturn-l2-webui
+          # Update tag to deploy new web UI.
+          tag: v0.0.6
+          fileName: saturn-l2-webui.tar.gz
+          out-file-path: resources/webui
+      -
+        name: Unpack web UI archive
+        run: |
+          cd resources/webui
+          tar zxvf saturn-l2-webui.tar.gz
+          rm saturn-l2-webui.tar.gz
+      -
+        name: Fetch all tags
+        run: git fetch --force --tags
+      -
+        name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.18
+      -
+        name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v2
+        with:
+          # either 'goreleaser' (default) or 'goreleaser-pro'
+          distribution: goreleaser
+          version: latest
+          args: release --rm-dist
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Your GoReleaser Pro key, if you are using the 'goreleaser-pro' distribution
+          # GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
