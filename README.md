@@ -13,4 +13,4 @@ aarshshah@192 ~ % curl http://127.0.0.1:1234/hello
   {"Age":25,"Name":"BajtosTheGreat"}
  ```
 
-5. To run the web UI, follow the instructions in the [saturn-l2-webui](https://github.com/filecoin-project/saturn-l2-webui) repo.
+5. To run the web UI, follow the instructions in the [saturn-webui](https://github.com/filecoin-project/saturn-webui) repo.
