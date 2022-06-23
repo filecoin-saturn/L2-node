@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	address "github.com/filecoin-project/go-address"
 	"github.com/gorilla/mux"
 
 	"github.com/filecoin-project/saturn-l2/resources"
@@ -34,7 +35,10 @@ func main() {
 
 	filAddr := os.Getenv("FIL_WALLET_ADDRESS")
 	if filAddr == "" {
-		panic(fmt.Errorf("no FIL_WALLET_ADDRESS provided"))
+		panic(errors.New("no FIL_WALLET_ADDRESS provided"))
+	}
+	if _, err := address.NewFromString(filAddr); err != nil {
+		panic(fmt.Errorf("invalid FIL_WALLET_ADDRESS format: %s", err.Error()))
 	}
 	conf, err := json.Marshal(config{FilAddr: filAddr})
 	if err != nil {
