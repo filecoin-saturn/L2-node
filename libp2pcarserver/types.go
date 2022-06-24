@@ -19,8 +19,8 @@ type CARTransferRequest struct {
 }
 
 type dagTraversalRequest struct {
-	root     cid.Cid
 	selector ipld.Node
+	root     cid.Cid
 }
 
 func carRequestToDAGRequest(req *CARTransferRequest) (*dagTraversalRequest, error) {
