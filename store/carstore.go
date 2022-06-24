@@ -16,11 +16,11 @@ import (
 type CarRef = cid.Cid
 
 type CARStore struct {
-	rootdir string
-	lk      sync.Mutex
-
 	writing map[CarRef]*blockstore.ReadWrite
 	open    map[CarRef]*blockstore.ReadOnly
+
+	rootdir string
+	lk      sync.Mutex
 }
 
 // Create a new CAR store roooted at the given directory.
