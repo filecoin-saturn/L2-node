@@ -68,8 +68,8 @@ func (l *Libp2pCARServer) serveCARFile(s network.Stream) {
 	_ = s.SetReadDeadline(time.Now().Add(readDeadline))
 	defer s.SetReadDeadline(time.Time{}) // nolint
 
-	reqBz, err := io.ReadAll(io.LimitReader(s, network.MessageSizeMax))
-	if err != nil {
+	reqBz, reqErr := io.ReadAll(io.LimitReader(s, network.MessageSizeMax))
+	if reqErr != nil {
 		return
 	}
 
@@ -78,8 +78,8 @@ func (l *Libp2pCARServer) serveCARFile(s network.Stream) {
 	if err := json.Unmarshal(reqBz, &req); err != nil {
 		return
 	}
-	dr, err := carRequestToDAGRequest(&req)
-	if err != nil {
+	dr, drErr := carRequestToDAGRequest(&req)
+	if drErr != nil {
 		return
 	}
 	log.Debugw("car transfer request", "base64-root", req.Root, "base64-selector", req.Selector)
@@ -96,8 +96,7 @@ func (l *Libp2pCARServer) serveCARFile(s network.Stream) {
 		bf := bufio.NewWriter(s)
 		defer bf.Flush()
 
-		_, err = car.TraverseV1(l.ctx, &ls, dr.root, dr.selector, bf)
-		if err != nil {
+		if _, err := car.TraverseV1(l.ctx, &ls, dr.root, dr.selector, bf); err != nil {
 			return err
 		}
 		return nil
