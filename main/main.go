@@ -58,6 +58,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	defer nl.Close()
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -65,6 +66,7 @@ func main() {
 		if err := srv.Serve(nl); err != http.ErrServerClosed {
 			panic(err)
 		}
+		defer srv.Close()
 		wg.Done()
 	}()
 
