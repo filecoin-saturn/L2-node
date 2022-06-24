@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	address "github.com/filecoin-project/go-address"
 	"github.com/gorilla/mux"
@@ -58,18 +59,19 @@ func main() {
 		panic(err)
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
 		if err := srv.Serve(nl); err != http.ErrServerClosed {
 			panic(err)
 		}
+		wg.Done()
 	}()
 
 	port = nl.Addr().(*net.TCPAddr).Port
 	fmt.Println("Server listening on", nl.Addr())
 	fmt.Printf("WebUI: http://localhost:%d/webui\n", port)
-	for {
-
-	}
+	wg.Wait()
 }
 
 func webuiHandler(w http.ResponseWriter, r *http.Request) {
