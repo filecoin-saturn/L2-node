@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	"golang.org/x/xerrors"
-
 	"github.com/ipfs/go-cid"
 	bstore "github.com/ipfs/go-ipfs-blockstore"
 	"github.com/ipld/go-car/v2/blockstore"
@@ -62,14 +60,14 @@ func (c *CARStore) Create(id CarRef, payloadCid cid.Cid, writer func(bstore.Bloc
 		// if old temp store exists, but is not in c.writing it's possibly left from a previous run; clean up
 
 		if err := os.Remove(c.pathFor(true, id)); err != nil {
-			return xerrors.Errorf("cleaning up old temp store: %w", err)
+			return fmt.Errorf("cleaning up old temp store: %w", err)
 		}
 	}
 
 	path := c.pathFor(true, id)
 	bs, err := blockstore.OpenReadWrite(path, []cid.Cid{payloadCid}, blockstore.UseWholeCIDs(true))
 	if err != nil {
-		return xerrors.Errorf("opening new rw store: %w", err)
+		return fmt.Errorf("opening new rw store: %w", err)
 	}
 
 	c.lk.Unlock()
@@ -78,20 +76,20 @@ func (c *CARStore) Create(id CarRef, payloadCid cid.Cid, writer func(bstore.Bloc
 	c.lk.Lock()
 
 	if ferr != nil {
-		return xerrors.Errorf("finalize store: %w", ferr)
+		return fmt.Errorf("finalize store: %w", ferr)
 	}
 
 	if err != nil {
 		if err := os.Remove(path); err != nil {
-			return xerrors.Errorf("cleaning up old temp store: %w", err)
+			return fmt.Errorf("cleaning up old temp store: %w", err)
 		}
-		return xerrors.Errorf("calling car writer: %w", err)
+		return fmt.Errorf("calling car writer: %w", err)
 	}
 
 	delete(c.writing, id)
 
 	if err := os.Rename(path, c.pathFor(false, id)); err != nil {
-		return xerrors.Errorf("move temp to complete store: %w", err)
+		return fmt.Errorf("move temp to complete store: %w", err)
 	}
 
 	return nil
@@ -122,7 +120,7 @@ func (c *CARStore) WithStore(id CarRef, writer func(bstore.Blockstore) error) er
 		ro, err := blockstore.OpenReadOnly(c.pathFor(false, id))
 		if err != nil {
 			c.lk.Unlock()
-			return xerrors.Errorf("open read only store: %w", err)
+			return fmt.Errorf("open read only store: %w", err)
 		}
 
 		c.open[id] = ro
