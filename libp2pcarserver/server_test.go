@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -82,12 +82,12 @@ func TestSimpleTransfer(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, s.CloseWrite())
 
-	resp, err := ioutil.ReadAll(s)
+	resp, err := io.ReadAll(s)
 	require.NoError(t, err)
 	require.NotEmpty(t, resp)
 
 	// ensure contents match
-	fbz, err := ioutil.ReadFile("../testdata/files/sample-v1.car")
+	fbz, err := os.ReadFile("../testdata/files/sample-v1.car")
 	require.NoError(t, err)
 	require.EqualValues(t, fbz, resp)
 }

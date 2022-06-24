@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"time"
 
 	logging "github.com/ipfs/go-log/v2"
@@ -69,7 +68,7 @@ func (l *Libp2pCARServer) serveCARFile(s network.Stream) {
 	_ = s.SetReadDeadline(time.Now().Add(readDeadline))
 	defer s.SetReadDeadline(time.Time{}) // nolint
 
-	reqBz, err := ioutil.ReadAll(io.LimitReader(s, network.MessageSizeMax))
+	reqBz, err := io.ReadAll(io.LimitReader(s, network.MessageSizeMax))
 	if err != nil {
 		return
 	}
