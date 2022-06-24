@@ -65,13 +65,13 @@ func (c *CARStore) Create(id CarRef, payloadCid cid.Cid, writer func(bstore.Bloc
 	}
 
 	path := c.pathFor(true, id)
-	bs, err := blockstore.OpenReadWrite(path, []cid.Cid{payloadCid}, blockstore.UseWholeCIDs(true))
-	if err != nil {
-		return fmt.Errorf("opening new rw store: %w", err)
+	bs, bsErr := blockstore.OpenReadWrite(path, []cid.Cid{payloadCid}, blockstore.UseWholeCIDs(true))
+	if bsErr != nil {
+		return fmt.Errorf("opening new rw store: %w", bsErr)
 	}
 
 	c.lk.Unlock()
-	err = writer(bs)
+	bsErr = writer(bs)
 	ferr := bs.Finalize()
 	c.lk.Lock()
 
@@ -79,11 +79,11 @@ func (c *CARStore) Create(id CarRef, payloadCid cid.Cid, writer func(bstore.Bloc
 		return fmt.Errorf("finalize store: %w", ferr)
 	}
 
-	if err != nil {
+	if bsErr != nil {
 		if err := os.Remove(path); err != nil {
 			return fmt.Errorf("cleaning up old temp store: %w", err)
 		}
-		return fmt.Errorf("calling car writer: %w", err)
+		return fmt.Errorf("calling car writer: %w", bsErr)
 	}
 
 	delete(c.writing, id)
