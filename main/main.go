@@ -29,7 +29,7 @@ func main() {
 		var err error
 		port, err = strconv.Atoi(portStr)
 		if err != nil {
-			panic(fmt.Errorf("Invalid PORT value '%s': %s", portStr, err.Error()))
+			panic(fmt.Errorf("invalid PORT value '%s': %s", portStr, err.Error()))
 		}
 	}
 
