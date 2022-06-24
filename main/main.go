@@ -76,8 +76,8 @@ func webuiHandler(w http.ResponseWriter, r *http.Request) {
 	rootDir := "webui"
 	path := strings.TrimPrefix(r.URL.Path, "/")
 
-	_, err := resources.WebUI.Open(path)
-	if path == rootDir || os.IsNotExist(err) {
+	_, pathErr := resources.WebUI.Open(path)
+	if path == rootDir || os.IsNotExist(pathErr) {
 		// file does not exist, serve index.html
 		index, err := resources.WebUI.ReadFile(rootDir + "/index.html")
 		if err != nil {
@@ -88,8 +88,8 @@ func webuiHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write(index)
 		return
-	} else if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	} else if pathErr != nil {
+		http.Error(w, pathErr.Error(), http.StatusInternalServerError)
 		return
 	}
 
