@@ -8,7 +8,7 @@ require (
 	github.com/ipfs/go-cid v0.1.0
 	github.com/ipfs/go-ipfs-blockstore v1.2.0
 	github.com/ipfs/go-log/v2 v2.5.1
-	github.com/ipld/go-car v0.3.3
+	github.com/ipld/go-car v0.4.0
 	github.com/ipld/go-car/v2 v2.1.2-0.20220429070120-51b5cbdd49db
 	github.com/ipld/go-ipld-prime v0.16.0
 	github.com/ipld/go-ipld-prime/storage/bsadapter v0.0.0-20211210234204-ce2a1c70cd73
