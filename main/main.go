@@ -29,16 +29,19 @@ func main() {
 		var err error
 		port, err = strconv.Atoi(portStr)
 		if err != nil {
-			panic(fmt.Errorf("Invalid PORT value '%s': %s", portStr, err.Error()))
+			fmt.Fprintf(os.Stderr, "Invalid PORT value '%s': %s\n", portStr, err.Error())
+			os.Exit(1)
 		}
 	}
 
 	filAddr := os.Getenv("FIL_WALLET_ADDRESS")
 	if filAddr == "" {
-		panic(errors.New("no FIL_WALLET_ADDRESS provided"))
+		fmt.Fprintf(os.Stderr, "No FIL_WALLET_ADDRESS provided. Please set the environment variable.\n")
+		os.Exit(2)
 	}
 	if _, err := address.NewFromString(filAddr); err != nil {
-		panic(fmt.Errorf("invalid FIL_WALLET_ADDRESS format: %s", err.Error()))
+		fmt.Fprintf(os.Stderr, "Invalid FIL_WALLET_ADDRESS format: %s\n", err.Error())
+		os.Exit(3)
 	}
 	conf, err := json.Marshal(config{FilAddr: filAddr})
 	if err != nil {
