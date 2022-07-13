@@ -43,14 +43,17 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Invalid FIL_WALLET_ADDRESS format: %s\n", err.Error())
 		os.Exit(3)
 	}
-	conf, err := json.Marshal(config{FilAddr: filAddr})
+	cfg := config{FilAddr: filAddr}
+	cfgJson, err := json.Marshal(cfg)
 	if err != nil {
 		panic(errors.New("failed to serialize config"))
 	}
 
 	m := mux.NewRouter()
-	m.PathPrefix("/config").Handler(http.HandlerFunc(configHandler(conf)))
-	m.PathPrefix("/webui").Handler(http.HandlerFunc(webuiHandler))
+	m.PathPrefix("/config").Handler(http.HandlerFunc(configHandler(cfgJson)))
+	m.PathPrefix("/webui").Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		webuiHandler(cfg, w, r)
+	}))
 
 	srv := &http.Server{
 		Handler: m,
@@ -76,9 +79,16 @@ func main() {
 	}
 }
 
-func webuiHandler(w http.ResponseWriter, r *http.Request) {
+func webuiHandler(cfg config, w http.ResponseWriter, r *http.Request) {
 	rootDir := "webui"
 	path := strings.TrimPrefix(r.URL.Path, "/")
+
+	if path == rootDir {
+		targetUrl := fmt.Sprintf("/%s/address/%s", rootDir, cfg.FilAddr)
+		statusCode := 303 // See Other (a temporary redirect)
+		http.Redirect(w, r, targetUrl, statusCode)
+		return
+	}
 
 	_, err := resources.WebUI.Open(path)
 	if path == rootDir || os.IsNotExist(err) {
