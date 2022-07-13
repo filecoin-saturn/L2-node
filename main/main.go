@@ -58,7 +58,8 @@ func main() {
 
 	nl, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "Cannot start the webserver: %s\n", err.Error())
+		os.Exit(4)
 	}
 
 	go func() {
