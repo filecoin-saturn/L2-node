@@ -46,10 +46,10 @@ type Libp2pHttpCARServer struct {
 	server      *http.Server
 	netListener net.Listener
 
-	cs *carstore.PersistentCache
+	cs *carstore.CarStore
 }
 
-func New(h host.Host, cs *carstore.PersistentCache) *Libp2pHttpCARServer {
+func New(h host.Host, cs *carstore.CarStore) *Libp2pHttpCARServer {
 	return &Libp2pHttpCARServer{
 		h:  h,
 		cs: cs,

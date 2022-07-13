@@ -4,7 +4,7 @@ go 1.16
 
 require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
-	github.com/filecoin-project/dagstore v0.5.3-0.20220607064902-ecfedbef105f
+	github.com/filecoin-project/dagstore v0.5.3-0.20220713123034-28520b6998ac
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/google/uuid v1.3.0
 	github.com/gopherjs/gopherjs v0.0.0-20190812055157-5d271430af9f // indirect
@@ -28,12 +28,13 @@ require (
 	github.com/libp2p/go-libp2p-http v0.2.1
 	github.com/libp2p/go-libp2p-record v0.1.3 // indirect
 	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417 // indirect
+	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/smartystreets/assertions v1.0.1 // indirect
 	github.com/stretchr/testify v1.7.0
 	github.com/syndtr/goleveldb v1.0.0
 	github.com/warpfork/go-testmark v0.9.0 // indirect
 	github.com/whyrusleeping/cbor-gen v0.0.0-20220302191723-37c43cae8e14 // indirect
-	github.com/whyrusleeping/timecache v0.0.0-20160911033111-cfcb2f1abfee
 	golang.org/x/exp v0.0.0-20210715201039-d37aa40e8013 // indirect
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 )
