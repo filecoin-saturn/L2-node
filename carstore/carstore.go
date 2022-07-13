@@ -217,6 +217,7 @@ func (cs *CarStore) Close() error {
 }
 
 func (cs *CarStore) FetchAndWriteCAR(reqID uuid.UUID, root cid.Cid, writer func(bstore.Blockstore) error) error {
+	cs.logger.Infow(reqID, "got CAR request for root", "root", root.String())
 	mh := root.Hash()
 
 	// which dagstore shards have the requested root cid ?
@@ -244,17 +245,19 @@ func (cs *CarStore) FetchAndWriteCAR(reqID uuid.UUID, root cid.Cid, writer func(
 		// if we weren't able to acquire the shard using an already existing CAR file -> execute the cache on second miss rule
 		// and return not found here.
 		if sa == nil {
-			cs.logger.Infow(reqID, "failed to acquire shard with nodownload=true", "err", err)
+			cs.logger.Infow(reqID, "failed to acquire shard with nodownload=true, will execute the cache miss code", "err", err)
 			cs.executeCacheMiss(reqID, root)
 			return ErrNotFound
 		}
 		defer sa.Close()
+		cs.logger.Infow(reqID, "acquired shard with nodownload=true")
 
 		bs, err := sa.Blockstore()
 		if err != nil {
 			cs.logger.LogError(reqID, "failed to get blockstore for acquired shard", err)
 			return fmt.Errorf("failed to get blockstore for shard: %w", err)
 		}
+		cs.logger.Infow(reqID, "acquired blockstore for shard")
 
 		return writer(&blockstore{bs})
 	}
@@ -262,6 +265,7 @@ func (cs *CarStore) FetchAndWriteCAR(reqID uuid.UUID, root cid.Cid, writer func(
 	// we don't have the requested CAR -> apply "cache on second miss" rule
 	cs.executeCacheMiss(reqID, root)
 
+	cs.logger.Infow(reqID, "returning not found for requested root")
 	return ErrNotFound
 }
 
@@ -277,11 +281,14 @@ func (cs *CarStore) executeCacheMiss(reqID uuid.UUID, root cid.Cid) {
 	cs.cacheMissTimeCache.Add(mhkey, struct{}{}, cache.DefaultExpiration)
 	// if this is the very first cache miss for this key, there's nothing to do here.
 	if !found {
+		cs.logger.Infow(reqID, "first cache miss for given root, not downloading it")
 		return
 	}
+	cs.logger.Infow(reqID, "more than one cache miss for given root, downloading and caching it")
 
 	// if we're in the process of downloading and caching the key -> there's nothing to do here.
 	if _, ok := cs.downloading[mhkey]; ok {
+		cs.logger.Infow(reqID, "download already in progress for given root, returning")
 		return
 	}
 
@@ -292,6 +299,7 @@ func (cs *CarStore) executeCacheMiss(reqID uuid.UUID, root cid.Cid) {
 	go func(mhkey string) {
 		sa, err := helpers.RegisterAndAcquireSync(cs.ctx, cs.dagst, keyFromCIDMultihash(root), mnt, dagstore.RegisterOpts{}, dagstore.AcquireOpts{})
 		if err == nil {
+			cs.logger.Infow(reqID, "successfully downloaded and cached given root")
 			sa.Close()
 		} else {
 			cs.logger.LogError(reqID, "failed to register/acquire shard", err)
