@@ -30,6 +30,14 @@ func GetTestServerFor(t *testing.T, path string) (cid.Cid, []byte, *httptest.Ser
 	return root, contents, GetTestServer(t, root.String(), contents)
 }
 
+func GetTestHangingServer(t *testing.T) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for {
+
+		}
+	}))
+}
+
 func GetTestServer(t *testing.T, root string, out []byte) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -39,5 +47,11 @@ func GetTestServer(t *testing.T, root string, out []byte) *httptest.Server {
 			return
 		}
 		w.Write(out)
+	}))
+}
+
+func GetTestErrorServer(t *testing.T) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "bad req", http.StatusInternalServerError)
 	}))
 }

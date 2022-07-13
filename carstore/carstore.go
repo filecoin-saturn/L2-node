@@ -41,6 +41,7 @@ var (
 	secondMissDuration        = 24 * time.Hour
 	maxRecoverAttempts        = uint64(1)
 	defaultMaxSize            = int64(200 * 1073741824) // 200 Gib
+	defaultDownloadTimeout    = 20 * time.Minute
 )
 
 var (
@@ -297,7 +298,9 @@ func (cs *CarStore) executeCacheMiss(reqID uuid.UUID, root cid.Cid) {
 	cs.downloading[mhkey] = struct{}{}
 
 	go func(mhkey string) {
-		sa, err := helpers.RegisterAndAcquireSync(cs.ctx, cs.dagst, keyFromCIDMultihash(root), mnt, dagstore.RegisterOpts{}, dagstore.AcquireOpts{})
+		ctx, cancel := context.WithDeadline(cs.ctx, time.Now().Add(defaultDownloadTimeout))
+		defer cancel()
+		sa, err := helpers.RegisterAndAcquireSync(ctx, cs.dagst, keyFromCIDMultihash(root), mnt, dagstore.RegisterOpts{}, dagstore.AcquireOpts{})
 		if err == nil {
 			cs.logger.Infow(reqID, "successfully downloaded and cached given root")
 			sa.Close()
