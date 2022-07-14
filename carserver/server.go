@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/filecoin-project/saturn-l2/logs"
+
 	"github.com/filecoin-project/saturn-l2/carstore"
 
 	"github.com/pkg/errors"
@@ -46,13 +48,15 @@ type Libp2pHttpCARServer struct {
 	server      *http.Server
 	netListener net.Listener
 
-	cs *carstore.CarStore
+	cs     *carstore.CarStore
+	logger *logs.SaturnLogger
 }
 
-func New(h host.Host, cs *carstore.CarStore) *Libp2pHttpCARServer {
+func New(h host.Host, cs *carstore.CarStore, logger *logs.SaturnLogger) *Libp2pHttpCARServer {
 	return &Libp2pHttpCARServer{
-		h:  h,
-		cs: cs,
+		h:      h,
+		cs:     cs,
+		logger: logger,
 	}
 }
 
@@ -122,28 +126,31 @@ func (l *Libp2pHttpCARServer) serveCARFile(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	log.Infow("car transfer request", "req", req)
+	// we have parsed the request successfully -> start logging and serving it
+	l.logger.Infow(dr.reqId, "got car transfer request")
 
-	if err := l.cs.FetchAndWriteCAR(dr.root, func(ro bstore.Blockstore) error {
+	if err := l.cs.FetchAndWriteCAR(dr.reqId, dr.root, func(ro bstore.Blockstore) error {
 		ls := cidlink.DefaultLinkSystem()
 		bsa := bsadapter.Adapter{Wrapped: ro}
 		ls.SetReadStorage(&bsa)
 
 		_, err = car.TraverseV1(l.ctx, &ls, dr.root, dr.selector, w, car.WithSkipOffset(dr.skip))
 		if err != nil {
+			l.logger.LogError(dr.reqId, "car transfer failed", err)
 			return fmt.Errorf("car traversal failed: %w", err)
 		}
 		return nil
 	}); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
 		if errors.Is(err, carstore.ErrNotFound) {
-			log.Debugw("car not found", "req", req)
+			l.logger.Debugw(dr.reqId, "car not found")
+			w.WriteHeader(http.StatusNotFound)
 		} else {
-			log.Errorw("car transfer failed", "req", req, "err", err)
+			l.logger.LogError(dr.reqId, "car transfer failed", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}
-	log.Debugw("car transfer successful", "req", req)
 
+	l.logger.Infow(dr.reqId, "car transfer successful")
 	// TODO record sent bytes and talk to log injestor
 }

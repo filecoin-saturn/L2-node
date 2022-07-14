@@ -167,6 +167,11 @@ func (cs *CarStore) Start(ctx context.Context) error {
 	return err
 }
 
+func (cs *CarStore) IsIndexed(ctx context.Context, root cid.Cid) (bool, error) {
+	sks, err := cs.dagst.ShardsContainingMultihash(ctx, root.Hash())
+	return len(sks) != 0, err
+}
+
 func (cs *CarStore) traceLoop() {
 	defer cs.wg.Done()
 

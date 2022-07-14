@@ -38,6 +38,23 @@ func GetTestHangingServer(t *testing.T) *httptest.Server {
 	}))
 }
 
+func GetTestServerForRoots(t *testing.T, out map[string][]byte) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		v := q.Get("arg")
+		if len(v) == 0 {
+			http.Error(w, "invalid arg", http.StatusBadRequest)
+			return
+		}
+		bz, ok := out[v]
+		if !ok {
+			http.Error(w, "invalid arg", http.StatusBadRequest)
+			return
+		}
+		w.Write(bz)
+	}))
+}
+
 func GetTestServer(t *testing.T, root string, out []byte) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()

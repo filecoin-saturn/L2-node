@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/filecoin-project/saturn-l2/logs"
+
 	cid "github.com/ipfs/go-cid"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -43,7 +45,9 @@ func TestSimpleTransfer(t *testing.T) {
 	root, contents, svc := testutils.GetTestServerFor(t, path)
 	defer svc.Close()
 	gwAPI := carstore.NewGatewayAPI(svc.URL)
-	cs, err := carstore.New(temp, gwAPI)
+	lg := logs.NewSaturnLogger()
+	cfg := carstore.Config{}
+	cs, err := carstore.New(temp, gwAPI, cfg, lg)
 	require.NoError(t, err)
 	require.NoError(t, cs.Start(ctx))
 
@@ -51,7 +55,7 @@ func TestSimpleTransfer(t *testing.T) {
 	p1, p2 := buildPeers(t, ctx)
 
 	// create and start the car server
-	carserver := New(p2, cs)
+	carserver := New(p2, cs, lg)
 	require.NoError(t, carserver.Start(ctx))
 
 	// send the request
@@ -59,18 +63,20 @@ func TestSimpleTransfer(t *testing.T) {
 	reqBz := mkRequest(t, root, 0)
 	u := fmt.Sprintf("libp2p://%s", p2.ID())
 	resp := sendHttpReq(t, client, u, reqBz)
-	require.EqualValues(t, http.StatusInternalServerError, resp.StatusCode)
 
-	// second fetch should work
+	require.EqualValues(t, http.StatusNotFound, resp.StatusCode)
+
+	// second fetch should not work
 	resp = sendHttpReq(t, client, u, reqBz)
-	require.EqualValues(t, http.StatusInternalServerError, resp.StatusCode)
+	require.EqualValues(t, http.StatusNotFound, resp.StatusCode)
+
+	// wait till L2 has cached the data
+	require.Eventually(t, func() bool {
+		has, err := cs.IsIndexed(ctx, root)
+		return has && err == nil
+	}, 1*time.Second, 100*time.Millisecond)
 
 	// third fetch should work
-	require.Eventually(t, func() bool {
-		b, err := cs.Has(root)
-		return b && err == nil
-	}, 10*time.Second, 200*time.Millisecond)
-
 	resp = sendHttpReq(t, client, u, reqBz)
 	require.EqualValues(t, http.StatusOK, resp.StatusCode)
 
@@ -87,6 +93,8 @@ func TestSimpleTransfer(t *testing.T) {
 	require.EqualValues(t, contents[101:], bz)
 }
 
+// TODO -> Test Parallel Transfers
+
 func readHTTPResponse(t *testing.T, resp *http.Response) []byte {
 	bz, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
@@ -101,7 +109,7 @@ func mkRequest(t *testing.T, root cid.Cid, offset uint64) []byte {
 	req := CARTransferRequest{
 		Root:       base64.StdEncoding.EncodeToString(root.Bytes()),
 		Selector:   base64.StdEncoding.EncodeToString(bf.Bytes()),
-		UUID:       uuid.New().String(),
+		ReqId:      uuid.New().String(),
 		SkipOffset: offset,
 	}
 	reqBz, err := json.Marshal(req)

@@ -3,8 +3,6 @@ package carstore
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -40,10 +38,8 @@ func TestPersistentCache(t *testing.T) {
 	// second hit -> not found
 	csh.fetchAndAssertNotFound(reqID, rootcid)
 
-	require.Eventually(t, func() bool {
-		ks, err := csh.cs.dagst.ShardsContainingMultihash(ctx, rootcid.Hash())
-		return err == nil && len(ks) == 1
-	}, 50*time.Second, 200*time.Millisecond)
+	// wait till l2 has fetched and cached it
+	csh.assertAvailable(t, ctx, rootcid)
 
 	// third hit -> found
 	csh.fetchAndAssertFound(ctx, reqID, rootcid)
@@ -87,16 +83,68 @@ func TestPersistentCacheConcurrent(t *testing.T) {
 	// send 100 concurrent requests
 	csh.fetchNAsyNC(rootcid, 100)
 
-	require.Eventually(t, func() bool {
-		ks, err := csh.cs.dagst.ShardsContainingMultihash(ctx, rootcid.Hash())
-		return err == nil && len(ks) == 1
-	}, 50*time.Second, 200*time.Millisecond)
+	csh.assertAvailable(t, ctx, rootcid)
 
 	// fetch shard 100 times -> should work
 	var errg errgroup.Group
 	for i := 0; i < 100; i++ {
 		errg.Go(func() error {
 			return csh.cs.FetchAndWriteCAR(uuid.New(), rootcid, func(_ bstore.Blockstore) error {
+				return nil
+			})
+		})
+
+	}
+	require.NoError(t, errg.Wait())
+}
+
+func TestPersistentCacheMultipleParallelRequests(t *testing.T) {
+	ctx := context.Background()
+	carFile1 := "../testdata/files/sample-v1.car"
+	rootcid1, bz1 := testutils.ParseCar(t, carFile1)
+
+	carFile2 := "../testdata/files/sample-wrapped-v2.car"
+	rootcid2, bz2 := testutils.ParseCar(t, carFile2)
+
+	carFile3 := "../testdata/files/sample-rw-bs-v2.car"
+	rootcid3, bz3 := testutils.ParseCar(t, carFile3)
+
+	out := make(map[string][]byte)
+	out[rootcid1.String()] = bz1
+	out[rootcid2.String()] = bz2
+	out[rootcid3.String()] = bz3
+
+	svc := testutils.GetTestServerForRoots(t, out)
+	defer svc.Close()
+
+	csh := newCarStoreHarness(t, svc.URL)
+	// send 100 concurrent requests
+	csh.fetchNAsyNC(rootcid1, 100)
+	// send 100 concurrent requests
+	csh.fetchNAsyNC(rootcid2, 100)
+	// send 100 concurrent requests
+	csh.fetchNAsyNC(rootcid3, 100)
+
+	csh.assertAvailable(t, ctx, rootcid1)
+	csh.assertAvailable(t, ctx, rootcid2)
+	csh.assertAvailable(t, ctx, rootcid3)
+
+	roots := []cid.Cid{rootcid1, rootcid2, rootcid3}
+
+	// fetch shard 100 times -> should work
+	var errg errgroup.Group
+	for i := 0; i < 100; i++ {
+		i := i
+		errg.Go(func() error {
+			return csh.cs.FetchAndWriteCAR(uuid.New(), roots[i%3], func(bs bstore.Blockstore) error {
+				blk, err := bs.Get(ctx, roots[i%3])
+				if err != nil {
+					return err
+				}
+				if blk == nil {
+					return errors.New("not found")
+				}
+
 				return nil
 			})
 		})
@@ -155,6 +203,13 @@ func TestDownloadTimeout(t *testing.T) {
 	csh.fetchAndAssertNotFound(reqID, rootcid)
 }
 
+func (csh *carstoreHarness) assertAvailable(t *testing.T, ctx context.Context, c cid.Cid) {
+	require.Eventually(t, func() bool {
+		ks, err := csh.cs.dagst.ShardsContainingMultihash(ctx, c.Hash())
+		return err == nil && len(ks) == 1
+	}, 50*time.Second, 200*time.Millisecond)
+}
+
 func (csh *carstoreHarness) fetchNAsyNC(rootCid cid.Cid, n int) {
 	var wg sync.WaitGroup
 	for i := 0; i < n; i++ {
@@ -167,20 +222,6 @@ func (csh *carstoreHarness) fetchNAsyNC(rootCid cid.Cid, n int) {
 		}()
 	}
 	wg.Wait()
-}
-
-func transientDirSize(dir string) (int64, error) {
-	var size int64
-	err := filepath.Walk(dir, func(_ string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			size += info.Size()
-		}
-		return err
-	})
-	return size, err
 }
 
 type carstoreHarness struct {
