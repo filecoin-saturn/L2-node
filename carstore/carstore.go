@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/filecoin-project/saturn-l2/station"
 
 	"github.com/google/uuid"
 
@@ -54,6 +57,7 @@ type Config struct {
 	// Maximum size to allocate to the car files directory on disk.
 	// defaults to 200 Gib
 	MaxCARFilesSize int64
+	DownloadTimeout time.Duration
 }
 
 type CarStore struct {
@@ -72,6 +76,9 @@ type CarStore struct {
 	mu                 sync.Mutex
 	cacheMissTimeCache *cache.Cache
 	downloading        map[string]struct{}
+
+	transientsDir   string
+	downloadTimeout time.Duration
 }
 
 func New(rootDir string, gwAPI GatewayAPI, cfg Config, logger *logs.SaturnLogger) (*CarStore, error) {
@@ -135,6 +142,11 @@ func New(rootDir string, gwAPI GatewayAPI, cfg Config, logger *logs.SaturnLogger
 		return nil, fmt.Errorf("failed to create dagstore to use for the car-store: %w", err)
 	}
 
+	downloadTimeout := defaultDownloadTimeout
+	if cfg.DownloadTimeout != time.Duration(0) {
+		downloadTimeout = cfg.DownloadTimeout
+	}
+
 	return &CarStore{
 		cacheMissTimeCache: cache.New(secondMissDuration, 5*time.Minute),
 		downloading:        make(map[string]struct{}),
@@ -144,6 +156,8 @@ func New(rootDir string, gwAPI GatewayAPI, cfg Config, logger *logs.SaturnLogger
 		gwAPI:              gwAPI,
 		gcCh:               gcCh,
 		logger:             logger.Subsystem("car-store"),
+		transientsDir:      transientsDir,
+		downloadTimeout:    downloadTimeout,
 	}, nil
 }
 
@@ -303,7 +317,7 @@ func (cs *CarStore) executeCacheMiss(reqID uuid.UUID, root cid.Cid) {
 	cs.downloading[mhkey] = struct{}{}
 
 	go func(mhkey string) {
-		ctx, cancel := context.WithDeadline(cs.ctx, time.Now().Add(defaultDownloadTimeout))
+		ctx, cancel := context.WithDeadline(cs.ctx, time.Now().Add(cs.downloadTimeout))
 		defer cancel()
 		sa, err := helpers.RegisterAndAcquireSync(ctx, cs.dagst, keyFromCIDMultihash(root), mnt, dagstore.RegisterOpts{}, dagstore.AcquireOpts{})
 		if err == nil {
@@ -317,6 +331,28 @@ func (cs *CarStore) executeCacheMiss(reqID uuid.UUID, root cid.Cid) {
 		delete(cs.downloading, mhkey)
 		cs.mu.Unlock()
 	}(mhkey)
+}
+
+func (cs *CarStore) Stat() (station.StorageStats, error) {
+	var out station.StorageStats
+
+	err := filepath.WalkDir(cs.transientsDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		fi, err := d.Info()
+		if err != nil {
+			return err
+		}
+		out.Bytes += uint64(fi.Size())
+		return nil
+	})
+
+	return out, err
 }
 
 // newDatastore creates a datastore under the given base directory

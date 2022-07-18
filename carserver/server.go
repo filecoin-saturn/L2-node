@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+
+	"github.com/filecoin-project/saturn-l2/station"
 
 	"github.com/filecoin-project/saturn-l2/logs"
 
@@ -50,13 +53,16 @@ type Libp2pHttpCARServer struct {
 
 	cs     *carstore.CarStore
 	logger *logs.SaturnLogger
+
+	spai station.StationAPI
 }
 
-func New(h host.Host, cs *carstore.CarStore, logger *logs.SaturnLogger) *Libp2pHttpCARServer {
+func New(h host.Host, cs *carstore.CarStore, logger *logs.SaturnLogger, sapi station.StationAPI) *Libp2pHttpCARServer {
 	return &Libp2pHttpCARServer{
 		h:      h,
 		cs:     cs,
 		logger: logger,
+		spai:   sapi,
 	}
 }
 
@@ -129,15 +135,24 @@ func (l *Libp2pHttpCARServer) serveCARFile(w http.ResponseWriter, r *http.Reques
 	// we have parsed the request successfully -> start logging and serving it
 	l.logger.Infow(dr.reqId, "got car transfer request")
 
+	sw := &statWriter{w: w}
+
 	if err := l.cs.FetchAndWriteCAR(dr.reqId, dr.root, func(ro bstore.Blockstore) error {
 		ls := cidlink.DefaultLinkSystem()
 		bsa := bsadapter.Adapter{Wrapped: ro}
 		ls.SetReadStorage(&bsa)
 
-		_, err = car.TraverseV1(l.ctx, &ls, dr.root, dr.selector, w, car.WithSkipOffset(dr.skip))
+		_, err = car.TraverseV1(l.ctx, &ls, dr.root, dr.selector, sw, car.WithSkipOffset(dr.skip))
 		if err != nil {
+			if err := l.spai.RecordRetrievalServed(l.ctx, sw.n, 1); err != nil {
+				l.logger.LogError(dr.reqId, "failed to record retrieval failure", err)
+			}
+
 			l.logger.LogError(dr.reqId, "car transfer failed", err)
 			return fmt.Errorf("car traversal failed: %w", err)
+		}
+		if err := l.spai.RecordRetrievalServed(l.ctx, sw.n, 0); err != nil {
+			l.logger.LogError(dr.reqId, "failed to record successful retrieval", err)
 		}
 		return nil
 	}); err != nil {
@@ -152,5 +167,16 @@ func (l *Libp2pHttpCARServer) serveCARFile(w http.ResponseWriter, r *http.Reques
 	}
 
 	l.logger.Infow(dr.reqId, "car transfer successful")
-	// TODO record sent bytes and talk to log injestor
+	// TODO: Talk to Log injestor here
+}
+
+type statWriter struct {
+	w io.Writer
+	n uint64
+}
+
+func (sw *statWriter) Write(p []byte) (n int, err error) {
+	n, err = sw.w.Write(p)
+	sw.n += uint64(n)
+	return
 }

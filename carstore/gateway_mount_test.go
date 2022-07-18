@@ -3,7 +3,10 @@ package carstore
 import (
 	"context"
 	"io/ioutil"
+	"sync"
 	"testing"
+
+	"github.com/filecoin-project/saturn-l2/station"
 
 	"github.com/filecoin-project/saturn-l2/testutils"
 
@@ -17,7 +20,7 @@ func TestGatewayMount(t *testing.T) {
 	svc := testutils.GetTestServer(t, root, bz)
 	defer svc.Close()
 
-	gwAPI := NewGatewayAPI(svc.URL)
+	gwAPI := NewGatewayAPI(svc.URL, &mockStationAPI{})
 	ctx := context.Background()
 	c, err := cid.Decode(root)
 	require.NoError(t, err)
@@ -41,4 +44,26 @@ func TestGatewayMount(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, out)
 	require.EqualValues(t, out, bz)
+}
+
+type mockStationAPI struct {
+	station.StationAPI
+
+	mu         sync.Mutex
+	downloaded uint64
+}
+
+func (m *mockStationAPI) RecordDataDownloaded(_ context.Context, bytesDownloaded uint64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.downloaded += bytesDownloaded
+	return nil
+}
+
+func (m *mockStationAPI) nDownloaded() uint64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return m.downloaded
 }

@@ -11,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	datastore "github.com/ipfs/go-datastore"
+	dss "github.com/ipfs/go-datastore/sync"
+
 	"github.com/filecoin-project/saturn-l2/logs"
 
 	cid "github.com/ipfs/go-cid"
@@ -41,22 +44,34 @@ func TestSimpleTransfer(t *testing.T) {
 	temp := t.TempDir()
 	ctx := context.Background()
 
+	mds := dss.MutexWrap(datastore.NewMapDatastore())
+	sapi := NewStationAPIImpl(mds, nil)
+
 	// create the getway api with a test http server
 	root, contents, svc := testutils.GetTestServerFor(t, path)
 	defer svc.Close()
-	gwAPI := carstore.NewGatewayAPI(svc.URL)
+	gwAPI := carstore.NewGatewayAPI(svc.URL, sapi)
 	lg := logs.NewSaturnLogger()
 	cfg := carstore.Config{}
 	cs, err := carstore.New(temp, gwAPI, cfg, lg)
 	require.NoError(t, err)
+	sapi.SetStorageStatsFetcher(cs)
 	require.NoError(t, cs.Start(ctx))
 
 	// create a mock libp2p network, two peers and a connection between them
 	p1, p2 := buildPeers(t, ctx)
 
 	// create and start the car server
-	carserver := New(p2, cs, lg)
+	carserver := New(p2, cs, lg, sapi)
 	require.NoError(t, carserver.Start(ctx))
+
+	as, err := sapi.AllStats(ctx)
+	require.NoError(t, err)
+	require.EqualValues(t, 0, as.Upload)
+	require.EqualValues(t, 0, as.ContentRequests)
+	require.EqualValues(t, 0, as.ContentReqErrors)
+	require.EqualValues(t, 0, as.Download)
+	require.EqualValues(t, 0, as.StorageStats.Bytes)
 
 	// send the request
 	client := libp2pHTTPClient(p1)
@@ -83,6 +98,13 @@ func TestSimpleTransfer(t *testing.T) {
 	bz := readHTTPResponse(t, resp)
 	// ensure contents match
 	require.EqualValues(t, contents, bz)
+	as, err = sapi.AllStats(ctx)
+	require.NoError(t, err)
+	require.EqualValues(t, len(contents), as.Upload)
+	require.EqualValues(t, 1, as.ContentRequests)
+	require.EqualValues(t, 0, as.ContentReqErrors)
+	require.EqualValues(t, len(contents), as.Download)
+	require.EqualValues(t, len(contents), as.StorageStats.Bytes)
 
 	// send request with the skip param
 	reqBz = mkRequest(t, root, 101)
@@ -91,6 +113,14 @@ func TestSimpleTransfer(t *testing.T) {
 
 	bz = readHTTPResponse(t, resp)
 	require.EqualValues(t, contents[101:], bz)
+
+	as, err = sapi.AllStats(ctx)
+	require.NoError(t, err)
+	require.EqualValues(t, len(contents)+len(contents)-101, as.Upload)
+	require.EqualValues(t, 2, as.ContentRequests)
+	require.EqualValues(t, 0, as.ContentReqErrors)
+	require.EqualValues(t, len(contents), as.Download)
+	require.EqualValues(t, len(contents), as.StorageStats.Bytes)
 }
 
 // TODO -> Test Parallel Transfers

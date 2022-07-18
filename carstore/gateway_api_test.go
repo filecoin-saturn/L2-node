@@ -56,3 +56,22 @@ func TestGatewayAPIFailure(t *testing.T) {
 	require.Error(t, err)
 	require.Empty(t, rd)
 }
+
+func TestIPFSGateway(t *testing.T) {
+	t.Skip("e2e test with IPFS Gateway")
+	ctx := context.Background()
+	gw := &gatewayAPI{
+		baseURL: defaultURL,
+	}
+
+	c, err := cid.Decode(root)
+	require.NoError(t, err)
+
+	rd, err := gw.Fetch(ctx, c)
+	require.NoError(t, err)
+	require.NotEmpty(t, rd)
+
+	bz, err := ioutil.ReadAll(rd)
+	require.NoError(t, err)
+	require.NotEmpty(t, bz)
+}

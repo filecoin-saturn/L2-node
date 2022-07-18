@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/filecoin-project/saturn-l2/station"
+
 	cid "github.com/ipfs/go-cid"
 
 	"golang.org/x/sync/errgroup"
@@ -29,8 +31,10 @@ func TestPersistentCache(t *testing.T) {
 	rootcid, bz := testutils.ParseCar(t, carv1File)
 	svc := testutils.GetTestServer(t, rootcid.String(), bz)
 	defer svc.Close()
-	csh := newCarStoreHarness(t, svc.URL)
+	csh := newCarStoreHarness(t, svc.URL, Config{})
 	reqID := uuid.New()
+
+	csh.assertStorageStats(t, station.StorageStats{0})
 
 	// first hit -> not found
 	csh.fetchAndAssertNotFound(reqID, rootcid)
@@ -43,9 +47,11 @@ func TestPersistentCache(t *testing.T) {
 
 	// third hit -> found
 	csh.fetchAndAssertFound(ctx, reqID, rootcid)
+	require.EqualValues(t, len(bz), csh.ms.nDownloaded())
 
 	// fourth hit -> found
 	csh.fetchAndAssertFound(ctx, reqID, rootcid)
+	require.EqualValues(t, len(bz), csh.ms.nDownloaded())
 
 	// wait for shard to become reclaimable again
 	require.Eventually(t, func() bool {
@@ -53,10 +59,13 @@ func TestPersistentCache(t *testing.T) {
 		return err == nil && si.ShardState == dagstore.ShardStateAvailable
 	}, 50*time.Second, 200*time.Millisecond)
 
+	csh.assertStorageStats(t, station.StorageStats{uint64(len(bz))})
+
 	// run dagstore GC -> CAR file is removed
 	res, err := csh.cs.dagst.GC(ctx)
 	require.NoError(t, err)
 	require.Len(t, res.Shards, 1)
+	csh.assertStorageStats(t, station.StorageStats{0})
 
 	// fetch car -> fails as we do not have it but will trigger a fetch again
 	csh.fetchAndAssertNotFound(reqID, rootcid)
@@ -70,6 +79,9 @@ func TestPersistentCache(t *testing.T) {
 	}, 50*time.Second, 200*time.Millisecond)
 
 	require.NoError(t, csh.cs.Close())
+	require.EqualValues(t, 2*len(bz), csh.ms.nDownloaded())
+
+	csh.assertStorageStats(t, station.StorageStats{uint64(len(bz))})
 }
 
 func TestPersistentCacheConcurrent(t *testing.T) {
@@ -78,7 +90,7 @@ func TestPersistentCacheConcurrent(t *testing.T) {
 	rootcid, bz := testutils.ParseCar(t, carv1File)
 	svc := testutils.GetTestServer(t, rootcid.String(), bz)
 	defer svc.Close()
-	csh := newCarStoreHarness(t, svc.URL)
+	csh := newCarStoreHarness(t, svc.URL, Config{})
 
 	// send 100 concurrent requests
 	csh.fetchNAsyNC(rootcid, 100)
@@ -96,6 +108,9 @@ func TestPersistentCacheConcurrent(t *testing.T) {
 
 	}
 	require.NoError(t, errg.Wait())
+	require.EqualValues(t, len(bz), csh.ms.nDownloaded())
+
+	csh.assertStorageStats(t, station.StorageStats{uint64(len(bz))})
 }
 
 func TestPersistentCacheMultipleParallelRequests(t *testing.T) {
@@ -103,41 +118,34 @@ func TestPersistentCacheMultipleParallelRequests(t *testing.T) {
 	carFile1 := "../testdata/files/sample-v1.car"
 	rootcid1, bz1 := testutils.ParseCar(t, carFile1)
 
-	carFile2 := "../testdata/files/sample-wrapped-v2.car"
+	carFile2 := "../testdata/files/sample-rw-bs-v2.car"
 	rootcid2, bz2 := testutils.ParseCar(t, carFile2)
-
-	carFile3 := "../testdata/files/sample-rw-bs-v2.car"
-	rootcid3, bz3 := testutils.ParseCar(t, carFile3)
 
 	out := make(map[string][]byte)
 	out[rootcid1.String()] = bz1
 	out[rootcid2.String()] = bz2
-	out[rootcid3.String()] = bz3
 
 	svc := testutils.GetTestServerForRoots(t, out)
 	defer svc.Close()
 
-	csh := newCarStoreHarness(t, svc.URL)
+	csh := newCarStoreHarness(t, svc.URL, Config{})
 	// send 100 concurrent requests
 	csh.fetchNAsyNC(rootcid1, 100)
 	// send 100 concurrent requests
 	csh.fetchNAsyNC(rootcid2, 100)
-	// send 100 concurrent requests
-	csh.fetchNAsyNC(rootcid3, 100)
 
 	csh.assertAvailable(t, ctx, rootcid1)
 	csh.assertAvailable(t, ctx, rootcid2)
-	csh.assertAvailable(t, ctx, rootcid3)
 
-	roots := []cid.Cid{rootcid1, rootcid2, rootcid3}
+	roots := []cid.Cid{rootcid1, rootcid2}
 
 	// fetch shard 100 times -> should work
 	var errg errgroup.Group
 	for i := 0; i < 100; i++ {
 		i := i
 		errg.Go(func() error {
-			return csh.cs.FetchAndWriteCAR(uuid.New(), roots[i%3], func(bs bstore.Blockstore) error {
-				blk, err := bs.Get(ctx, roots[i%3])
+			return csh.cs.FetchAndWriteCAR(uuid.New(), roots[i%2], func(bs bstore.Blockstore) error {
+				blk, err := bs.Get(ctx, roots[i%2])
 				if err != nil {
 					return err
 				}
@@ -151,6 +159,9 @@ func TestPersistentCacheMultipleParallelRequests(t *testing.T) {
 
 	}
 	require.NoError(t, errg.Wait())
+
+	csh.assertStorageStats(t, station.StorageStats{uint64(len(bz1) + len(bz2))})
+	require.EqualValues(t, len(bz1)+len(bz2), csh.ms.nDownloaded())
 }
 
 func TestMountFetchErrorConcurrent(t *testing.T) {
@@ -158,7 +169,7 @@ func TestMountFetchErrorConcurrent(t *testing.T) {
 	rootcid, _ := testutils.ParseCar(t, carv1File)
 	svc := testutils.GetTestErrorServer(t)
 	defer svc.Close()
-	csh := newCarStoreHarness(t, svc.URL)
+	csh := newCarStoreHarness(t, svc.URL, Config{})
 
 	// send 100 concurrent requests
 	csh.fetchNAsyNC(rootcid, 100)
@@ -178,18 +189,17 @@ func TestMountFetchErrorConcurrent(t *testing.T) {
 		err := <-errCh
 		require.EqualError(t, err, ErrNotFound.Error())
 	}
+
+	require.EqualValues(t, 0, csh.ms.nDownloaded())
+	csh.assertStorageStats(t, station.StorageStats{0})
 }
 
 func TestDownloadTimeout(t *testing.T) {
 	carv1File := "../testdata/files/sample-v1.car"
 	rootcid, _ := testutils.ParseCar(t, carv1File)
-	x := defaultDownloadTimeout
-	defer func() {
-		defaultDownloadTimeout = x
-	}()
-	defaultDownloadTimeout = 100 * time.Millisecond
+
 	svc := testutils.GetTestHangingServer(t)
-	csh := newCarStoreHarness(t, svc.URL)
+	csh := newCarStoreHarness(t, svc.URL, Config{DownloadTimeout: 1 * time.Millisecond})
 
 	reqID := uuid.New()
 	// first try -> not found
@@ -197,10 +207,13 @@ func TestDownloadTimeout(t *testing.T) {
 
 	// second try -> not found
 	csh.fetchAndAssertNotFound(reqID, rootcid)
+
 	time.Sleep(1 * time.Second)
 
 	// still errors out
 	csh.fetchAndAssertNotFound(reqID, rootcid)
+	require.EqualValues(t, 0, csh.ms.nDownloaded())
+	csh.assertStorageStats(t, station.StorageStats{0})
 }
 
 func (csh *carstoreHarness) assertAvailable(t *testing.T, ctx context.Context, c cid.Cid) {
@@ -227,24 +240,24 @@ func (csh *carstoreHarness) fetchNAsyNC(rootCid cid.Cid, n int) {
 type carstoreHarness struct {
 	t  *testing.T
 	cs *CarStore
+	ms *mockStationAPI
 }
 
-func newCarStoreHarness(t *testing.T, apiurl string) *carstoreHarness {
+func newCarStoreHarness(t *testing.T, apiurl string, cfg Config) *carstoreHarness {
+	sapi := &mockStationAPI{}
 	lg := logs.NewSaturnLogger()
-	cfg := Config{}
 
 	ctx := context.Background()
 	temp := t.TempDir()
 
-	cs, err := New(temp, &gatewayAPI{
-		baseURL: apiurl,
-	}, cfg, lg)
+	cs, err := New(temp, NewGatewayAPI(apiurl, sapi), cfg, lg)
 	require.NoError(t, err)
 	require.NoError(t, cs.Start(ctx))
 
 	return &carstoreHarness{
 		cs: cs,
 		t:  t,
+		ms: sapi,
 	}
 }
 
@@ -267,4 +280,10 @@ func (csh *carstoreHarness) fetchAndAssertFound(ctx context.Context, reqID uuid.
 		return nil
 	})
 	require.NoError(csh.t, err)
+}
+
+func (csh *carstoreHarness) assertStorageStats(t *testing.T, ess station.StorageStats) {
+	ss, err := csh.cs.Stat()
+	require.NoError(t, err)
+	require.Equal(t, ess, ss)
 }
