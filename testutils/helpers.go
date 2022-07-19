@@ -1,32 +1,43 @@
 package testutils
 
 import (
-	"io/ioutil"
+	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	car "github.com/ipld/go-car/v2"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/ipld/go-ipld-prime/storage/bsadapter"
+	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
 
 	cid "github.com/ipfs/go-cid"
 	carv2bs "github.com/ipld/go-car/v2/blockstore"
 	"github.com/stretchr/testify/require"
 )
 
-func ParseCar(t *testing.T, path string) (root cid.Cid, contents []byte) {
+func ParseCar(t *testing.T, ctx context.Context, path string) (cid.Cid, []byte) {
 	from, err := carv2bs.OpenReadOnly(path)
 	require.NoError(t, err)
 	rts, err := from.Roots()
 	require.NoError(t, err)
+
+	ls := cidlink.DefaultLinkSystem()
+	bsa := bsadapter.Adapter{Wrapped: from}
+	ls.SetReadStorage(&bsa)
+
+	w := bytes.NewBuffer(nil)
+	_, err = car.TraverseV1(ctx, &ls, rts[0], selectorparse.CommonSelector_ExploreAllRecursively, w)
+	require.NoError(t, err)
+
 	require.NoError(t, from.Close())
 
-	out, err := ioutil.ReadFile(path)
-	require.NoError(t, err)
-	require.NotEmpty(t, out)
-
-	return rts[0], out
+	return rts[0], w.Bytes()
 }
 
-func GetTestServerFor(t *testing.T, path string) (cid.Cid, []byte, *httptest.Server) {
-	root, contents := ParseCar(t, path)
+func GetTestServerFor(t *testing.T, ctx context.Context, path string) (cid.Cid, []byte, *httptest.Server) {
+	root, contents := ParseCar(t, ctx, path)
 	return root, contents, GetTestServer(t, root.String(), contents)
 }
 

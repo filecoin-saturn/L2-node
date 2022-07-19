@@ -43,7 +43,6 @@ var (
 	maxConcurrentReadyFetches = 3
 	secondMissDuration        = 24 * time.Hour
 	maxRecoverAttempts        = uint64(1)
-	defaultMaxSize            = int64(200 * 1073741824) // 200 Gib
 	defaultDownloadTimeout    = 20 * time.Minute
 )
 
@@ -56,8 +55,8 @@ var (
 type Config struct {
 	// Maximum size to allocate to the car files directory on disk.
 	// defaults to 200 Gib
-	MaxCARFilesSize int64
-	DownloadTimeout time.Duration
+	MaxCARFilesDiskSpace int64
+	DownloadTimeout      time.Duration
 }
 
 type CarStore struct {
@@ -111,11 +110,6 @@ func New(rootDir string, gwAPI GatewayAPI, cfg Config, logger *logs.SaturnLogger
 	// dagstore will write the automated GC trace to this channel
 	gcCh := make(chan dagstore.AutomatedGCResult, 1)
 
-	var maxSize int64 = cfg.MaxCARFilesSize
-	if maxSize == 0 {
-		maxSize = defaultMaxSize
-	}
-
 	dcfg := dagstore.Config{
 		TransientsDir:             transientsDir,
 		IndexRepo:                 irepo,
@@ -130,7 +124,7 @@ func New(rootDir string, gwAPI GatewayAPI, cfg Config, logger *logs.SaturnLogger
 		AutomatedGCEnabled:        true,
 		AutomatedGCConfig: &dagstore.AutomatedGCConfig{
 			GarbeCollectionStrategy:   gc.NewLRUGarbageCollector(),
-			MaxTransientDirSize:       maxSize,
+			MaxTransientDirSize:       cfg.MaxCARFilesDiskSpace,
 			TransientsGCWatermarkHigh: 0.9,
 			TransientsGCWatermarkLow:  0.7,
 			AutomatedGCTraceCh:        gcCh,

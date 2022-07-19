@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"fmt"
 
+	selectorparse "github.com/ipld/go-ipld-prime/traversal/selector/parse"
+
 	"github.com/google/uuid"
 
 	cid "github.com/ipfs/go-cid"
@@ -39,13 +41,19 @@ func carRequestToDAGRequest(req *CARTransferRequest) (*dagTraversalRequest, erro
 		return nil, fmt.Errorf("failed to cast root to cid: %s", err)
 	}
 
-	selbz, err := base64.StdEncoding.DecodeString(req.Selector)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode selector: %s", err)
-	}
-	sel, err := decodeSelector(selbz)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode selector to ipld node: %s", err)
+	var sel ipld.Node
+	if req.Selector != "" {
+		selbz, err := base64.StdEncoding.DecodeString(req.Selector)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode selector: %s", err)
+		}
+		sel, err = decodeSelector(selbz)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode selector to ipld node: %s", err)
+		}
+	} else {
+		// use the default "select all" selector.
+		sel = selectorparse.CommonSelector_ExploreAllRecursively
 	}
 
 	reqId, err := uuid.Parse(req.ReqId)

@@ -7,6 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ipld/go-ipld-prime/codec/dagcbor"
+	"github.com/ipld/go-ipld-prime/multicodec"
+
 	"github.com/filecoin-project/saturn-l2/station"
 
 	cid "github.com/ipfs/go-cid"
@@ -24,14 +27,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var defaultMaxSize = int64(200 * 1073741824) // 200 Gib
+
+func init() {
+	multicodec.RegisterEncoder(0x71, dagcbor.Encode)
+	multicodec.RegisterDecoder(0x71, dagcbor.Decode)
+}
+
 func TestPersistentCache(t *testing.T) {
 	ctx := context.Background()
 
 	carv1File := "../testdata/files/sample-v1.car"
-	rootcid, bz := testutils.ParseCar(t, carv1File)
+	rootcid, bz := testutils.ParseCar(t, ctx, carv1File)
 	svc := testutils.GetTestServer(t, rootcid.String(), bz)
 	defer svc.Close()
-	csh := newCarStoreHarness(t, svc.URL, Config{})
+	csh := newCarStoreHarness(t, svc.URL, Config{MaxCARFilesDiskSpace: defaultMaxSize})
 	reqID := uuid.New()
 
 	csh.assertStorageStats(t, station.StorageStats{0})
@@ -87,10 +97,10 @@ func TestPersistentCache(t *testing.T) {
 func TestPersistentCacheConcurrent(t *testing.T) {
 	ctx := context.Background()
 	carv1File := "../testdata/files/sample-v1.car"
-	rootcid, bz := testutils.ParseCar(t, carv1File)
+	rootcid, bz := testutils.ParseCar(t, ctx, carv1File)
 	svc := testutils.GetTestServer(t, rootcid.String(), bz)
 	defer svc.Close()
-	csh := newCarStoreHarness(t, svc.URL, Config{})
+	csh := newCarStoreHarness(t, svc.URL, Config{MaxCARFilesDiskSpace: defaultMaxSize})
 
 	// send 100 concurrent requests
 	csh.fetchNAsyNC(rootcid, 100)
@@ -116,10 +126,10 @@ func TestPersistentCacheConcurrent(t *testing.T) {
 func TestPersistentCacheMultipleParallelRequests(t *testing.T) {
 	ctx := context.Background()
 	carFile1 := "../testdata/files/sample-v1.car"
-	rootcid1, bz1 := testutils.ParseCar(t, carFile1)
+	rootcid1, bz1 := testutils.ParseCar(t, ctx, carFile1)
 
 	carFile2 := "../testdata/files/sample-rw-bs-v2.car"
-	rootcid2, bz2 := testutils.ParseCar(t, carFile2)
+	rootcid2, bz2 := testutils.ParseCar(t, ctx, carFile2)
 
 	out := make(map[string][]byte)
 	out[rootcid1.String()] = bz1
@@ -128,7 +138,7 @@ func TestPersistentCacheMultipleParallelRequests(t *testing.T) {
 	svc := testutils.GetTestServerForRoots(t, out)
 	defer svc.Close()
 
-	csh := newCarStoreHarness(t, svc.URL, Config{})
+	csh := newCarStoreHarness(t, svc.URL, Config{MaxCARFilesDiskSpace: defaultMaxSize})
 	// send 100 concurrent requests
 	csh.fetchNAsyNC(rootcid1, 100)
 	// send 100 concurrent requests
@@ -165,11 +175,12 @@ func TestPersistentCacheMultipleParallelRequests(t *testing.T) {
 }
 
 func TestMountFetchErrorConcurrent(t *testing.T) {
+	ctx := context.Background()
 	carv1File := "../testdata/files/sample-v1.car"
-	rootcid, _ := testutils.ParseCar(t, carv1File)
+	rootcid, _ := testutils.ParseCar(t, ctx, carv1File)
 	svc := testutils.GetTestErrorServer(t)
 	defer svc.Close()
-	csh := newCarStoreHarness(t, svc.URL, Config{})
+	csh := newCarStoreHarness(t, svc.URL, Config{MaxCARFilesDiskSpace: defaultMaxSize})
 
 	// send 100 concurrent requests
 	csh.fetchNAsyNC(rootcid, 100)
@@ -195,11 +206,13 @@ func TestMountFetchErrorConcurrent(t *testing.T) {
 }
 
 func TestDownloadTimeout(t *testing.T) {
+	ctx := context.Background()
 	carv1File := "../testdata/files/sample-v1.car"
-	rootcid, _ := testutils.ParseCar(t, carv1File)
+
+	rootcid, _ := testutils.ParseCar(t, ctx, carv1File)
 
 	svc := testutils.GetTestHangingServer(t)
-	csh := newCarStoreHarness(t, svc.URL, Config{DownloadTimeout: 1 * time.Millisecond})
+	csh := newCarStoreHarness(t, svc.URL, Config{MaxCARFilesDiskSpace: defaultMaxSize, DownloadTimeout: 1 * time.Millisecond})
 
 	reqID := uuid.New()
 	// first try -> not found

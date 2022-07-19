@@ -3,7 +3,6 @@ module github.com/filecoin-project/saturn-l2
 go 1.16
 
 require (
-	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/filecoin-project/dagstore v0.5.3-0.20220718102032-40704514c0c0
 	github.com/filecoin-project/go-address v1.0.0
 	github.com/golang/snappy v0.0.3 // indirect
@@ -23,12 +22,8 @@ require (
 	github.com/ipld/go-codec-dagpb v1.3.2 // indirect
 	github.com/ipld/go-ipld-prime v0.16.0
 	github.com/ipld/go-ipld-prime/storage/bsadapter v0.0.0-20211210234204-ce2a1c70cd73
-	github.com/libp2p/go-libp2p v0.19.2
-	github.com/libp2p/go-libp2p-core v0.15.1
-	github.com/libp2p/go-libp2p-gostream v0.3.2-0.20220309102559-3d4abe2a19ac
-	github.com/libp2p/go-libp2p-http v0.2.1
+	github.com/libp2p/go-libp2p v0.19.2 // indirect
 	github.com/libp2p/go-libp2p-record v0.1.3 // indirect
-	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/smartystreets/assertions v1.0.1 // indirect

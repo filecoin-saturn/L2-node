@@ -72,6 +72,23 @@ func TestStationAPIImpl(t *testing.T) {
 			ContentReqErrors: 2,
 			Download:         300,
 		}}, as)
+
+	// restart API -> we should still get the same values
+	sapi = NewStationAPIImpl(ds, &mockStorageStatsFetcher{
+		out: 790,
+	})
+	as, err = sapi.AllStats(ctx)
+	require.NoError(t, err)
+	require.Equal(t, station.StationStats{RPInfo: station.RPInfo{Version: Version},
+		StorageStats: station.StorageStats{
+			Bytes: 790,
+		},
+		ReqStats: station.ReqStats{
+			Upload:           600,
+			ContentRequests:  2,
+			ContentReqErrors: 2,
+			Download:         300,
+		}}, as)
 }
 
 type mockStorageStatsFetcher struct {
