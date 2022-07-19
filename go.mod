@@ -5,6 +5,7 @@ go 1.16
 require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/filecoin-project/dagstore v0.5.3-0.20220718102032-40704514c0c0
+	github.com/filecoin-project/go-address v1.0.0
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/google/uuid v1.3.0
 	github.com/gopherjs/gopherjs v0.0.0-20190812055157-5d271430af9f // indirect
