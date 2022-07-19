@@ -65,17 +65,12 @@ func main() {
 		os.Exit(4)
 	}
 
-	go func() {
-		if err := srv.Serve(nl); err != http.ErrServerClosed {
-			panic(err)
-		}
-	}()
-
 	port = nl.Addr().(*net.TCPAddr).Port
 	fmt.Println("Server listening on", nl.Addr())
 	fmt.Printf("WebUI: http://localhost:%d/webui\n", port)
-	for {
 
+	if err := srv.Serve(nl); err != http.ErrServerClosed {
+		panic(err)
 	}
 }
 
