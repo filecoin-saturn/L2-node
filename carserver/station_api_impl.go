@@ -41,13 +41,13 @@ func (s *StationAPIImpl) RecordRetrievalServed(ctx context.Context, bytesServed,
 	defer s.mu.Unlock()
 
 	return s.createOrUpdateReqStatsUnlocked(ctx, func(r *station.ReqStats) {
-		r.Upload = bytesServed
-		r.ContentRequests = 1
-		r.ContentReqErrors = nErrors
+		r.TotalBytesUploaded = bytesServed
+		r.NContentRequests = 1
+		r.NContentReqErrors = nErrors
 	}, func(r *station.ReqStats) {
-		r.Upload += bytesServed
-		r.ContentRequests += 1
-		r.ContentReqErrors += nErrors
+		r.TotalBytesUploaded += bytesServed
+		r.NContentRequests += 1
+		r.NContentReqErrors += nErrors
 	})
 }
 
@@ -56,9 +56,9 @@ func (s *StationAPIImpl) RecordDataDownloaded(ctx context.Context, bytesDownload
 	defer s.mu.Unlock()
 
 	return s.createOrUpdateReqStatsUnlocked(ctx, func(r *station.ReqStats) {
-		r.Download = bytesDownloaded
+		r.TotalBytesDownloaded = bytesDownloaded
 	}, func(r *station.ReqStats) {
-		r.Download += bytesDownloaded
+		r.TotalBytesDownloaded += bytesDownloaded
 	})
 }
 

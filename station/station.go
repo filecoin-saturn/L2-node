@@ -25,12 +25,12 @@ type RPInfo struct {
 }
 
 type StorageStats struct {
-	Bytes uint64
+	BytesCurrentlyStored uint64
 }
 
 type ReqStats struct {
-	Upload           uint64
-	Download         uint64
-	ContentRequests  uint64
-	ContentReqErrors uint64
+	TotalBytesUploaded   uint64
+	TotalBytesDownloaded uint64
+	NContentRequests     uint64
+	NContentReqErrors    uint64
 }

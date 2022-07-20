@@ -21,7 +21,7 @@ func TestStationAPIImpl(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, station.StationStats{RPInfo: station.RPInfo{Version: Version},
 		StorageStats: station.StorageStats{
-			Bytes: 790,
+			BytesCurrentlyStored: 790,
 		}}, as)
 
 	require.NoError(t, sapi.RecordDataDownloaded(ctx, 100))
@@ -29,10 +29,10 @@ func TestStationAPIImpl(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, station.StationStats{RPInfo: station.RPInfo{Version: Version},
 		StorageStats: station.StorageStats{
-			Bytes: 790,
+			BytesCurrentlyStored: 790,
 		},
 		ReqStats: station.ReqStats{
-			Download: 100,
+			TotalBytesDownloaded: 100,
 		}}, as)
 
 	require.NoError(t, sapi.RecordDataDownloaded(ctx, 200))
@@ -40,10 +40,10 @@ func TestStationAPIImpl(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, station.StationStats{RPInfo: station.RPInfo{Version: Version},
 		StorageStats: station.StorageStats{
-			Bytes: 790,
+			BytesCurrentlyStored: 790,
 		},
 		ReqStats: station.ReqStats{
-			Download: 300,
+			TotalBytesDownloaded: 300,
 		}}, as)
 
 	require.NoError(t, sapi.RecordRetrievalServed(ctx, 100, 0))
@@ -51,12 +51,12 @@ func TestStationAPIImpl(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, station.StationStats{RPInfo: station.RPInfo{Version: Version},
 		StorageStats: station.StorageStats{
-			Bytes: 790,
+			BytesCurrentlyStored: 790,
 		},
 		ReqStats: station.ReqStats{
-			Upload:          100,
-			ContentRequests: 1,
-			Download:        300,
+			TotalBytesUploaded:   100,
+			NContentRequests:     1,
+			TotalBytesDownloaded: 300,
 		}}, as)
 
 	require.NoError(t, sapi.RecordRetrievalServed(ctx, 500, 2))
@@ -64,13 +64,13 @@ func TestStationAPIImpl(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, station.StationStats{RPInfo: station.RPInfo{Version: Version},
 		StorageStats: station.StorageStats{
-			Bytes: 790,
+			BytesCurrentlyStored: 790,
 		},
 		ReqStats: station.ReqStats{
-			Upload:           600,
-			ContentRequests:  2,
-			ContentReqErrors: 2,
-			Download:         300,
+			TotalBytesUploaded:   600,
+			NContentRequests:     2,
+			NContentReqErrors:    2,
+			TotalBytesDownloaded: 300,
 		}}, as)
 
 	// restart API -> we should still get the same values
@@ -81,13 +81,13 @@ func TestStationAPIImpl(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, station.StationStats{RPInfo: station.RPInfo{Version: Version},
 		StorageStats: station.StorageStats{
-			Bytes: 790,
+			BytesCurrentlyStored: 790,
 		},
 		ReqStats: station.ReqStats{
-			Upload:           600,
-			ContentRequests:  2,
-			ContentReqErrors: 2,
-			Download:         300,
+			TotalBytesUploaded:   600,
+			NContentRequests:     2,
+			NContentReqErrors:    2,
+			TotalBytesDownloaded: 300,
 		}}, as)
 }
 
@@ -97,6 +97,6 @@ type mockStorageStatsFetcher struct {
 
 func (ms *mockStorageStatsFetcher) Stat() (station.StorageStats, error) {
 	return station.StorageStats{
-		Bytes: ms.out,
+		BytesCurrentlyStored: ms.out,
 	}, nil
 }

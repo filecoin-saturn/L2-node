@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/filecoin-project/saturn-l2/types"
+
 	"golang.org/x/sync/errgroup"
 
 	"github.com/filecoin-project/saturn-l2/station"
@@ -67,7 +69,7 @@ func TestSimpleTransfer(t *testing.T) {
 	// ensure contents match
 	require.EqualValues(t, contents, bz)
 
-	csh.assertStationStats(t, ctx, len(contents), len(contents), 1, 0, len(contents))
+	csh.assertStationStats(t, ctx, len(contents), len(contents), 3, 2, len(contents))
 
 	// send request with the skip param
 	reqBz = mkRequestWithoutSelector(t, root, 101)
@@ -77,7 +79,7 @@ func TestSimpleTransfer(t *testing.T) {
 	bz = readHTTPResponse(t, resp)
 	require.EqualValues(t, contents[101:], bz)
 
-	csh.assertStationStats(t, ctx, len(contents)+len(contents)-101, len(contents), 2, 0, len(contents))
+	csh.assertStationStats(t, ctx, len(contents)+len(contents)-101, len(contents), 4, 2, len(contents))
 }
 
 func TestParallelTransfers(t *testing.T) {
@@ -93,8 +95,11 @@ func TestParallelTransfers(t *testing.T) {
 	contents1 := csh.bz1
 	contents2 := csh.bz2
 
+	count := 0
+
 	// send the requests so both get cached
 	require.Eventually(t, func() bool {
+		count++
 		reqBz := mkRequestWithoutSelector(t, root1, 0)
 		resp := sendHttpReq(t, url, reqBz)
 		if resp.StatusCode == http.StatusOK {
@@ -105,6 +110,7 @@ func TestParallelTransfers(t *testing.T) {
 	}, 5*time.Second, 100*time.Millisecond)
 
 	require.Eventually(t, func() bool {
+		count++
 		reqBz := mkRequestWithoutSelector(t, root2, 0)
 		resp := sendHttpReq(t, url, reqBz)
 		if resp.StatusCode == http.StatusOK {
@@ -116,7 +122,7 @@ func TestParallelTransfers(t *testing.T) {
 	}, 5*time.Second, 100*time.Millisecond)
 
 	l := len(contents1) + len(contents2)
-	csh.assertStationStats(t, ctx, l, l, 2, 0, l)
+	csh.assertStationStats(t, ctx, l, l, count, count-2, l)
 
 	var errg errgroup.Group
 
@@ -145,7 +151,7 @@ func TestParallelTransfers(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	csh.assertStationStats(t, ctx, 6*l, l, 12, 0, l)
+	csh.assertStationStats(t, ctx, 6*l, l, count+10, count-2, l)
 }
 
 type carServerHarness struct {
@@ -162,11 +168,11 @@ type carServerHarness struct {
 func (csh *carServerHarness) assertStationStats(t *testing.T, ctx context.Context, upload, download, reqs, errors, storage int) {
 	as, err := csh.sapi.AllStats(ctx)
 	require.NoError(t, err)
-	require.EqualValues(t, upload, as.Upload)
-	require.EqualValues(t, reqs, as.ContentRequests)
-	require.EqualValues(t, errors, as.ContentReqErrors)
-	require.EqualValues(t, download, as.Download)
-	require.EqualValues(t, storage, as.StorageStats.Bytes)
+	require.EqualValues(t, upload, as.TotalBytesUploaded)
+	require.EqualValues(t, reqs, as.NContentRequests)
+	require.EqualValues(t, errors, as.NContentReqErrors)
+	require.EqualValues(t, download, as.TotalBytesDownloaded)
+	require.EqualValues(t, storage, as.StorageStats.BytesCurrentlyStored)
 }
 
 func (csh *carServerHarness) Stop(t *testing.T) {
@@ -226,7 +232,7 @@ func readHTTPResponse(t *testing.T, resp *http.Response) []byte {
 }
 
 func mkRequestWithoutSelector(t *testing.T, root cid.Cid, offset uint64) []byte {
-	req := CARTransferRequest{
+	req := types.CARTransferRequest{
 		Root:       base64.StdEncoding.EncodeToString(root.Bytes()),
 		ReqId:      uuid.New().String(),
 		SkipOffset: offset,

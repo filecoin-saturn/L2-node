@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/filecoin-project/saturn-l2/types"
+
 	"github.com/filecoin-project/saturn-l2/station"
 
 	"github.com/filecoin-project/saturn-l2/logs"
@@ -14,8 +16,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	logging "github.com/ipfs/go-log/v2"
-
 	bstore "github.com/ipfs/go-ipfs-blockstore"
 
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -23,8 +23,6 @@ import (
 
 	car "github.com/ipld/go-car/v2"
 )
-
-var log = logging.Logger("http-car-server")
 
 var (
 	maxRequestSize = int64(1048576) // 1 MiB - max size of the CAR transfer request
@@ -47,54 +45,57 @@ func New(cs *carstore.CarStore, logger *logs.SaturnLogger, sapi station.StationA
 
 func (l *HTTPCARServer) ServeCARFile(w http.ResponseWriter, r *http.Request) {
 	// read the json car transfer request
-	var req CARTransferRequest
+	var req types.CARTransferRequest
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("failed to parse request: %s", err), http.StatusBadRequest)
 		return
 	}
-	dr, err := carRequestToDAGRequest(&req)
+	dr, err := req.ToDAGRequest()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to parse request: %s", err), http.StatusBadRequest)
 		return
 	}
 
 	// we have parsed the request successfully -> start logging and serving it
-	l.logger.Infow(dr.reqId, "got car transfer request")
+	l.logger.Infow(dr.ReqId, "got car transfer request")
 
 	sw := &statWriter{w: w}
 
-	if err := l.cs.FetchAndWriteCAR(dr.reqId, dr.root, func(ro bstore.Blockstore) error {
+	if err := l.cs.FetchAndWriteCAR(dr.ReqId, dr.Root, func(ro bstore.Blockstore) error {
 		ls := cidlink.DefaultLinkSystem()
 		bsa := bsadapter.Adapter{Wrapped: ro}
 		ls.SetReadStorage(&bsa)
 
-		_, err = car.TraverseV1(r.Context(), &ls, dr.root, dr.selector, sw, car.WithSkipOffset(dr.skip))
+		_, err = car.TraverseV1(r.Context(), &ls, dr.Root, dr.Selector, sw, car.WithSkipOffset(dr.Skip))
 		if err != nil {
 			if err := l.spai.RecordRetrievalServed(r.Context(), sw.n, 1); err != nil {
-				l.logger.LogError(dr.reqId, "failed to record retrieval failure", err)
+				l.logger.LogError(dr.ReqId, "failed to record retrieval failure", err)
 			}
 
-			l.logger.LogError(dr.reqId, "car transfer failed", err)
+			l.logger.LogError(dr.ReqId, "car transfer failed", err)
 			return fmt.Errorf("car traversal failed: %w", err)
 		}
 
 		if err := l.spai.RecordRetrievalServed(r.Context(), sw.n, 0); err != nil {
-			l.logger.LogError(dr.reqId, "failed to record successful retrieval", err)
+			l.logger.LogError(dr.ReqId, "failed to record successful retrieval", err)
 		}
 		return nil
 	}); err != nil {
+		if err := l.spai.RecordRetrievalServed(r.Context(), sw.n, 1); err != nil {
+			l.logger.LogError(dr.ReqId, "failed to record retrieval failure", err)
+		}
+		l.logger.LogError(dr.ReqId, "failed to server car", err)
+
 		if errors.Is(err, carstore.ErrNotFound) {
-			l.logger.Debugw(dr.reqId, "car not found")
-			w.WriteHeader(http.StatusNotFound)
+			http.Error(w, "car not found", http.StatusNotFound)
 		} else {
-			l.logger.LogError(dr.reqId, "car transfer failed", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}
 
-	l.logger.Infow(dr.reqId, "car transfer successful")
+	l.logger.Infow(dr.ReqId, "car transfer successful")
 	// TODO: Talk to Log injestor here
 }
 

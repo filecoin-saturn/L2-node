@@ -1,4 +1,4 @@
-package carserver
+package types
 
 import (
 	"bytes"
@@ -24,15 +24,8 @@ type CARTransferRequest struct {
 	SkipOffset uint64
 }
 
-type dagTraversalRequest struct {
-	reqId    uuid.UUID
-	root     cid.Cid
-	selector ipld.Node
-	skip     uint64
-}
-
-func carRequestToDAGRequest(req *CARTransferRequest) (*dagTraversalRequest, error) {
-	rootbz, err := base64.StdEncoding.DecodeString(req.Root)
+func (c *CARTransferRequest) ToDAGRequest() (*DagTraversalRequest, error) {
+	rootbz, err := base64.StdEncoding.DecodeString(c.Root)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode root: %s", err)
 	}
@@ -42,8 +35,8 @@ func carRequestToDAGRequest(req *CARTransferRequest) (*dagTraversalRequest, erro
 	}
 
 	var sel ipld.Node
-	if req.Selector != "" {
-		selbz, err := base64.StdEncoding.DecodeString(req.Selector)
+	if c.Selector != "" {
+		selbz, err := base64.StdEncoding.DecodeString(c.Selector)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode selector: %s", err)
 		}
@@ -56,17 +49,24 @@ func carRequestToDAGRequest(req *CARTransferRequest) (*dagTraversalRequest, erro
 		sel = selectorparse.CommonSelector_ExploreAllRecursively
 	}
 
-	reqId, err := uuid.Parse(req.ReqId)
+	reqId, err := uuid.Parse(c.ReqId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse uuid: %w", err)
 	}
 
-	return &dagTraversalRequest{
-		reqId:    reqId,
-		root:     rootcid,
-		selector: sel,
-		skip:     req.SkipOffset,
+	return &DagTraversalRequest{
+		ReqId:    reqId,
+		Root:     rootcid,
+		Selector: sel,
+		Skip:     c.SkipOffset,
 	}, nil
+}
+
+type DagTraversalRequest struct {
+	ReqId    uuid.UUID
+	Root     cid.Cid
+	Selector ipld.Node
+	Skip     uint64
 }
 
 func decodeSelector(sel []byte) (ipld.Node, error) {

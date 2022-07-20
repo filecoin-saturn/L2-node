@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	logging "github.com/ipfs/go-log/v2"
+
 	"github.com/filecoin-project/saturn-l2/station"
 
 	"github.com/filecoin-project/saturn-l2/carserver"
@@ -48,6 +50,8 @@ type config struct {
 }
 
 func main() {
+	logging.SetAllLoggers(logging.LevelInfo)
+
 	ctx := context.Background()
 	cfg, err := mkConfig()
 	if err != nil {

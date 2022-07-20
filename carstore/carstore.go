@@ -231,7 +231,7 @@ func (cs *CarStore) Close() error {
 }
 
 func (cs *CarStore) FetchAndWriteCAR(reqID uuid.UUID, root cid.Cid, writer func(bstore.Blockstore) error) error {
-	cs.logger.Infow(reqID, "got CAR request for root", "root", root.String())
+	cs.logger.Infow(reqID, "got CAR request", "root", root.String())
 	mh := root.Hash()
 
 	// which dagstore shards have the requested root cid ?
@@ -342,7 +342,7 @@ func (cs *CarStore) Stat() (station.StorageStats, error) {
 		if err != nil {
 			return err
 		}
-		out.Bytes += uint64(fi.Size())
+		out.BytesCurrentlyStored += uint64(fi.Size())
 		return nil
 	})
 

@@ -5,7 +5,7 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 )
 
-var baseLogger = logging.Logger("saturn-node")
+var base = logging.Logger("saturn-l2")
 
 type SaturnLogger struct {
 	logger    *logging.ZapEventLogger
@@ -14,7 +14,7 @@ type SaturnLogger struct {
 
 func NewSaturnLogger() *SaturnLogger {
 	return &SaturnLogger{
-		logger: baseLogger,
+		logger: base,
 	}
 }
 
