@@ -33,18 +33,18 @@ import (
 const (
 	// PORT_ENV_VAR is the environment variable that determines the port the saturn L2 service will bind to.
 	// If this environment variable is not configured, this service will bind to any available port.
-	PORT_ENV_VAR = "PORT_ENV"
+	PORT_ENV_VAR = "PORT"
 
 	// ROOT_DIR_ENV_VAR is the environment variable that determines the root directory of the Saturn L2 Node.
 	// All persistent state and cached CAR files will be persisted under this directory.
 	// Mandatory environment variable -> no default for now.
-	ROOT_DIR_ENV_VAR = "ROOT_DIR_ENV"
+	ROOT_DIR_ENV_VAR = "ROOT_DIR"
 
 	// MAX_DISK_SPACE_VAR configures the environment variable that determines the maximum disk space the L2 node can use to
 	// store cached CAR files. If this env variable is not configured, it defaults to 200GiB.
-	MAX_DISK_SPACE_VAR = "MAX_L2_DISK_SPACE_ENV"
+	MAX_DISK_SPACE_VAR = "MAX_L2_DISK_SPACE"
 
-	FIL_ADDRESS_VAR = "FIL_WALLET_ADDRESS_ENV"
+	FIL_ADDRESS_VAR = "FIL_WALLET_ADDRESS"
 )
 
 var (
