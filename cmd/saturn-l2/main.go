@@ -148,10 +148,10 @@ func mkConfig() (config, error) {
 	// parse FIL address
 	filAddr := os.Getenv(FIL_ADDRESS_VAR)
 	if filAddr == "" {
-		return config{}, errors.New("No FIL_WALLET_ADDRESS provided. Please set the environment variable.\n")
+		return config{}, fmt.Errorf("No %s provided. Please set the environment variable.\n", FIL_ADDRESS_VAR)
 	}
 	if _, err := address.NewFromString(filAddr); err != nil {
-		return config{}, fmt.Errorf("Invalid FIL_WALLET_ADDRESS format: %w", err)
+		return config{}, fmt.Errorf("Invalid %s format: %w", FIL_ADDRESS_VAR, err)
 	}
 
 	// parse max disk space
@@ -172,7 +172,7 @@ func mkConfig() (config, error) {
 
 	rootDirStr := os.Getenv(ROOT_DIR_ENV_VAR)
 	if rootDirStr == "" {
-		return config{}, errors.New("No ROOT_DIR provided. Please set the environment variable.")
+		return config{}, fmt.Errorf("No %s provided. Please set the environment variable.", ROOT_DIR_ENV_VAR)
 	}
 
 	return config{
