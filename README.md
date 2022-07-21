@@ -119,10 +119,11 @@ Response:
 
   **Request**
   ```
-  {"ReqId":"00c1d646-7b06-445f-9162-1966c670f37d",
-  "Root":"QmfMYyn8LUWEfRXfijKFjBAshSsPVRUgwLZzsD7kcTtX1A",
-  "Selector":"",
-  "SkipOffset":0}
+  {"ReqId":"00c1d646-7b06-445f-9162-1966c670f37d", // UUID for the request -> used for referencing, logging and debugging. Mandatory.
+  "Root":"QmfMYyn8LUWEfRXfijKFjBAshSsPVRUgwLZzsD7kcTtX1A", // Base64 string encoding of the cid byte array. Mandatory.
+  "Selector":"", // Base 64 string encoding of the selector byte array. Optional and can test without this for now.
+  "SkipOffset":0 // Skip offset for the CAR to download. Optional. 
+}
   ```
 
   **Response**
@@ -131,7 +132,7 @@ Response:
 
   Status Codes:
   404 -> L2 does not have the requested content.
-  200 -> L2 has the requested content and CAR file bytes will be streamed back.
+  200 -> L2 has the requested content and CAR file bytes will be streamed back in the response body.
   500 -> Internal L2 error that we should probably look into.
   ```
 
