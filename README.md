@@ -107,7 +107,7 @@ WebUI: http://localhost:52860/webui
 
 
 Note that the the Saturn L2 node only binds to the **localhost** loopback network interface and so will only be reachable from the same machine.
-In the above snippet, `52860` is the port that the Saturn L2 node binds to on the localhost interface. This port can be configured using the `PORT_ENV` environment variable as mentioned above.
+In the above snippet, `52860` is the port that the Saturn L2 node binds to on the localhost interface. This port can be configured using the `PORT` environment variable as mentioned above.
 
 ### HTTP APIs
 
