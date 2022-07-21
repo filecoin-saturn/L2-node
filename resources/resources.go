@@ -1,6 +1,9 @@
 package resources
 
-import "embed"
+import (
+	"embed"
+	_ "embed"
+)
 
 // webui folder is empty during local development, embed resources.go
 // so go doesn't complain about "no embeddable files"
