@@ -44,7 +44,7 @@ At present, the L2 implementation is in it's V0 state with the following feature
 
 - The L2 node exposes an HTTP API to serve a CAR file for a given (root, optional selector).
 
-- The L2 node also exposes an HTTP to fetch stats that the operator/user of the L2 node might be interested in. These stats include the total amount of data downloaded by the L2 node, the amount of data served to other CDN peers by the L2 node etc etc.
+- The L2 node also exposes an HTTP API to fetch stats that the operator/user of the L2 node might be interested in. These stats include the total amount of data downloaded by the L2 node, the amount of data served to other CDN peers by the L2 node etc etc.
 
 ## Setting up the L2 node and invoking the HTTP APIs
 
