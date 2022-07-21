@@ -106,7 +106,7 @@ In the above snippet, `52860` is the port that the Saturn L2 node binds to on th
 ```
 curl http://localhost:52860/stats
 
-Output: 
+Response: 
 {"Version":"v0.0.0",
 "BytesCurrentlyStored":0, -> Total space currently taken up by the cached CAR files on the L2 user's machine. 
 "TotalBytesUploaded":0,   -> Total number of bytes uploaded/serverd by the L2 node to requesting peers in it's entire lifetime. 
@@ -117,11 +117,28 @@ Output:
    
 2. GET **/dag/car**
 
+
+**Request**
+
+```
+{"ReqId":"00c1d646-7b06-445f-9162-1966c670f37d",
+"Root":"QmfMYyn8LUWEfRXfijKFjBAshSsPVRUgwLZzsD7kcTtX1A",
+"Selector":"",
+"SkipOffset":0}
+```
+
+**Response**
+
+```
+Body: CAR file bytes are streamed
+
+Status Codes:
+
+404 -> L2 does not have the requested content
+200 -> L2 has the requested content and CAR file bytes will be streamed back.
+400 -> Internal L2 error that we should probably look into.
 ```
 
 
 
-``
-
-
-Sample cids to test with can be found [here](https://pl-strflt.notion.site/Sample-cids-for-testing-Saturn-IPFS-Gateway-can-serve-all-these-cids-4387a7b734aa4a5fa3166d8eac7cac5e). These are cids the IPFS Gateway can serve.
+**Sample cids to test with** can be found [here](https://pl-strflt.notion.site/Sample-cids-for-testing-Saturn-IPFS-Gateway-can-serve-all-these-cids-4387a7b734aa4a5fa3166d8eac7cac5e). These are cids the IPFS Gateway can serve.
