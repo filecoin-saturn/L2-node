@@ -71,6 +71,12 @@ At present, the L2 implementation is in it's V0 state with the following feature
 	    All persistent state and cached CAR files will be persisted under this directory.
 	    Note: This is a mandatory environment variable -> no default for now.
 
+       The following state is currently persisted inside the root directory on the user's machine:
+
+       a. CAR files fetched from the IPFS Gateway. This is the data that the Saturn L2 CDN node is caching. These are stored as flat files on disk.
+       b. Internal dagstore bookkeeping state. The indices for the cached CARv2 files are persisted as flat files on disk and the state of each dag/shard/CAR file is persisted in a leveldb key-value store on disk.
+       c. L2 node stats that the L2 user/Station might be interested in. These are persisted in JSON format in a leveldb key-value store on disk.
+
    3. `MAX_L2_DISK_SPACE`
        `MAX_L2_DISK_SPACE` is the environment variable that determines the maximum disk space the L2 node
 	   can use to store cached CAR files. If this env variable is not configured, it defaults to 200GiB.
