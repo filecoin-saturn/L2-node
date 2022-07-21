@@ -22,19 +22,19 @@ At present, the L2 implementation is in it's V0 state with the following feature
 
 - The L2 node cache misses to the IPFS Gateway as it's origin server. The eventual goal is to cache miss to the Filecoin SP network and will be implemented down the road.
 
-- The L2 node follows the "cache on second miss rule". It only fetches and caches content(read CAR files) if it see's two requests for the same content in a rolling duration of 24 hours. This is well established CDN engineering wisdowm and prevents disk churn on the L2s as most content is only ever requested once from a CDN node.
+- The L2 node follows the "cache on second miss rule". It only fetches and caches content(read CAR files) if it see's two requests for the same content in a rolling duration of 24 hours. This is well established CDN engineering wisdom and prevents disk churn on the L2s as most content is only ever requested once from a CDN node.
 
 #### Serves CAR file retrievals over HTTP for an IPLD (root cid, selector) tuple
 
 - The L2 node serves retrievals of CAR files over HTTP for a given (root cid, optional selector) tuple if it already has the requested DAG.
 
-- If it does not have the requested DAG, it simply returns a 404 so the client can fetch it directly from the IPFS Gateway. This decision was taken keeping in mind that it will be faster for the client to fetch the content directly from the IPFS Gateway rather than the client downloading it from the L2 which is itself downloading the content from the IPFS Gateway. This is because the L2 clients i.e. L1 Saturn nodes have significantly superiror bandwidth compared to L2s. Low L2 uplink speeds without the benefits of geo-location and without the implementation of multi-peer L2 downloads can definitely become a bottleneck for L1s in the L2 cache miss scenario.
+- If it does not have the requested DAG, it simply returns a 404 so the client can fetch it directly from the IPFS Gateway. This decision was taken keeping in mind that it will be faster for the client to fetch the content directly from the IPFS Gateway rather than the client downloading it from the L2 which is itself downloading the content from the IPFS Gateway. This is because the L2 clients i.e. L1 Saturn nodes have significantly superior bandwidth compared to L2s. Low L2 uplink speeds without the benefits of geo-location and without the implementation of multi-peer L2 downloads can definitely become a bottleneck for L1s in the L2 cache miss scenario.
 
 - The L2 network does NOT support parallel download of a DAG from multiple L2 nodes for now.
 
 ### Dagstore as a cache for CAR files
 
-- The L2 node uses the [dagstore](https://github.com/filecoin-project/dagstore) as a thread-safe, persistent, high-througput and fixed sized cache for CAR files whose size we might not know upfront before we stream them from the origin server and download them. Filecoin SPs also use the dagstore for the same purpose i.e. a persistent cache for CAR files.
+- The L2 node uses the [dagstore](https://github.com/filecoin-project/dagstore) as a thread-safe, persistent, high-throughput and fixed sized cache for CAR files whose size we might not know upfront before we stream them from the origin server and download them. Filecoin SPs also use the dagstore for the same purpose i.e. a persistent cache for CAR files.
 
 - The dagstore ensures that the space used to persist CAR files never exceeds the space allocated to the L2 node by the user. It does this by using an automated LRU GC algorithm to evict CAR files to make space for new CAR files when the space used by CAR files exceeds a given threshold. The LRU GC algorithm uses a quota allocation mechanism to account for the fact that the L2 node can't know the size of a CAR file upfront before streaming the entire file from the IPFS Gateway. More details can be found [here](https://github.com/filecoin-project/dagstore/pull/125).
 
@@ -109,10 +109,10 @@ curl http://localhost:52860/stats
 Response:
 {"Version":"v0.0.0",
 "BytesCurrentlyStored":0, -> Total space currently taken up by the cached CAR files on the L2 user's machine.
-"TotalBytesUploaded":0,   -> Total number of bytes uploaded/serverd by the L2 node to requesting peers in it's entire lifetime.
+"TotalBytesUploaded":0,   -> Total number of bytes uploaded/served by the L2 node to requesting peers in it's entire lifetime.
 "TotalBytesDownloaded":0, -> Total number of bytes downloaded by the L2 node from the IPFS Gateway/origin server in it's entire lifetime.
-"NContentRequests":0,     -> Total number of requests recieved by the L2 node for content from clients in it's entire lifetime.
-"NContentReqErrors":0}    -> Total number of error encountered by the L2 node while serving content to client in it's entire lifetime.
+"NContentRequests":0,     -> Total number of requests received by the L2 node for content from clients in it's entire lifetime.
+"NContentReqErrors":0}    -> Total number of errors encountered by the L2 node while serving content to client in it's entire lifetime.
 ```
 
 2. GET **/dag/car**
