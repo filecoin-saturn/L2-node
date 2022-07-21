@@ -1,6 +1,6 @@
 # Saturn L2 Node
 
-The Saturn L2 Node is a CDN node for the Saturn network that fetches and caches/persists IPLD Dags serialised as CAR files. It fetches CAR files from origin servers that can serve IPLD data such as the IPFS Gateway and Filecoin SPs. 
+The Saturn L2 Node is a CDN node for the Saturn network that fetches and caches/persists IPLD Dags serialised as CAR files. It fetches CAR files from origin servers that can serve IPLD data such as the IPFS Gateway and Filecoin SPs.
 
 
 The L2 node is meant to run on NATT'd home machines. This means that the L2 implementation needs to account for:
@@ -10,9 +10,9 @@ The L2 node is meant to run on NATT'd home machines. This means that the L2 impl
 3. L2's will be NATT'd and not reachable from the public internet.
 4. L2's will have flaky connectivity.
 
-We've documented the important considerations and design of the L2 node that will allows us to build a reliable, low latency and high bandwidth CDN abstraction on top of these resource contrained homne machines with flaky connectivity at https://pl-strflt.notion.site/Building-the-Saturn-L2-network-and-L1-L2-interplay-6518deda51344a9db04bd3037b270ada. 
+We've documented the important considerations and design of the L2 node that will allows us to build a reliable, low latency and high bandwidth CDN abstraction on top of these resource contrained homne machines with flaky connectivity at https://pl-strflt.notion.site/Building-the-Saturn-L2-network-and-L1-L2-interplay-6518deda51344a9db04bd3037b270ada.
 
-The document also details the implementation path we will be taking to eventually build a robust and feature complete MVP for the Saturn L2. 
+The document also details the implementation path we will be taking to eventually build a robust and feature complete MVP for the Saturn L2.
 
 ## L2 V0
 
@@ -50,44 +50,44 @@ At present, the L2 implementation is in it's V0 state with the following feature
 
 1. Build and Install the Saturn L2 binary located at cmd/saturn-l2.
    ```
-   cd cmd/saturn-l2 
+   cd cmd/saturn-l2
    go build ./...
-   ``` 
+   ```
 
 2. Run the saturn-l2 binary
    ```
-   cd cmd/saturn-l2 
+   cd cmd/saturn-l2
    ./saturn-l2
    ```
 
-   Note that before running the binary, you need to configure the following environment variables: 
+   Note that before running the binary, you need to configure the following environment variables:
    ```
    1. `PORT_ENV`
        `PORT_ENV` is the environment variable that determines the port the saturn L2 service will bind to.
 	    If this environment variable is not configured, this service will bind to any available port.
- 
+
    2. `ROOT_DIR_ENV`
        `ROOT_DIR_ENV is the environment variable that determines the root directory of the Saturn L2 Node.
 	    All persistent state and cached CAR files will be persisted under this directory.
-	    Note: This is a mandatory environment variable -> no default for now.   
+	    Note: This is a mandatory environment variable -> no default for now.
 
    3. `MAX_L2_DISK_SPACE_ENV`
        `MAX_L2_DISK_SPACE_ENV is the environment variable that determines the maximum disk space the L2 node
 	   can use to store cached CAR files. If this env variable is not configured, it defaults to 200GiB.
-	    Note: The configured value should be greater than or equal to 200Gib. 
+	    Note: The configured value should be greater than or equal to 200Gib.
 
    4. `FIL_WALLET_ADDRESS_ENV`
        `FIL_WALLET_ADDRESS_ENV` is the environment variable that determines the Filecoin wallet address of the L2 user.
 	    Note: This is a mandatory environment variable -> no default.
-   ```  
-   
+   ```
+
 
 
 
 3. One the binary starts, it will print this to the standard output:
 
 ```
-./saturn-l2                
+./saturn-l2
 2022-07-21T11:30:34.226+0200	INFO	car-store	carstore/carstore.go:159	starting car store
 2022-07-21T11:30:34.227+0200	INFO	car-store	carstore/carstore.go:173	successfully started car store
 Server listening on 127.0.0.1:52860
@@ -102,19 +102,19 @@ In the above snippet, `52860` is the port that the Saturn L2 node binds to on th
 ### HTTP APIs
 
 1. GET **/stats**
- 
+
 ```
 curl http://localhost:52860/stats
 
-Response: 
+Response:
 {"Version":"v0.0.0",
-"BytesCurrentlyStored":0, -> Total space currently taken up by the cached CAR files on the L2 user's machine. 
-"TotalBytesUploaded":0,   -> Total number of bytes uploaded/serverd by the L2 node to requesting peers in it's entire lifetime. 
+"BytesCurrentlyStored":0, -> Total space currently taken up by the cached CAR files on the L2 user's machine.
+"TotalBytesUploaded":0,   -> Total number of bytes uploaded/serverd by the L2 node to requesting peers in it's entire lifetime.
 "TotalBytesDownloaded":0, -> Total number of bytes downloaded by the L2 node from the IPFS Gateway/origin server in it's entire lifetime.
 "NContentRequests":0,     -> Total number of requests recieved by the L2 node for content from clients in it's entire lifetime.
-"NContentReqErrors":0}    -> Total number of error encountered by the L2 node while serving content to client in it's entire lifetime. 
+"NContentReqErrors":0}    -> Total number of error encountered by the L2 node while serving content to client in it's entire lifetime.
 ```
-   
+
 2. GET **/dag/car**
 
   **Request**
@@ -138,3 +138,30 @@ Response:
 
 
 **Sample cids to test with** can be found [here](https://pl-strflt.notion.site/Sample-cids-for-testing-Saturn-IPFS-Gateway-can-serve-all-these-cids-4387a7b734aa4a5fa3166d8eac7cac5e). These are cids the IPFS Gateway can serve.
+
+## Developer's Guide
+
+### Release process
+
+Publishing a new version is easy:
+
+1. Create a tag
+2. Push it to GitHub
+
+GitHub Actions and GoReleaser will take care of the rest.
+
+Example script:
+
+```bash
+$ git checkout main
+$ git pull
+$ git tag -a -s vA.B.C
+$ git push origin vA.B.C
+```
+
+Replace vA.B.C with the actual version number, and please follow
+[Semantic Versioning](https://semver.org).
+
+You can omit `-s` if you are not signing your commits.
+
+
