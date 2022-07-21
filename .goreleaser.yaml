@@ -13,6 +13,9 @@ builds:
       - linux
       - windows
       - darwin
+    ignore:
+    - goos: windows
+      goarch: arm64
     main: ./cmd/saturn-l2
 
 archives:
