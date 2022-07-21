@@ -31,15 +31,25 @@ import (
 )
 
 const (
-	PORT_ENV_VAR          = "PORT"
-	FIL_ADDRESS_VAR       = "FIL_WALLET_ADDRESS"
-	MAX_DISK_SPACE_VAR    = "MAX_DISK_SPACE"
-	IPFS_GATEWAY_BASE_URL = "https://ipfs.io/api/v0/dag/export"
-	ROOT_DIR_ENV_VAR      = "ROOT_DIR"
+	// PORT_ENV_VAR is the environment variable that determines the port the saturn L2 service will bind to.
+	// If this environment variable is not configured, this service will bind to any available port.
+	PORT_ENV_VAR = "PORT_ENV"
+
+	// ROOT_DIR_ENV_VAR is the environment variable that determines the root directory of the Saturn L2 Node.
+	// All persistent state and cached CAR files will be persisted under this directory.
+	// Mandatory environment variable -> no default for now.
+	ROOT_DIR_ENV_VAR = "ROOT_DIR_ENV"
+
+	// MAX_DISK_SPACE_VAR configures the environment variable that determines the maximum disk space the L2 node can use to
+	// store cached CAR files. If this env variable is not configured, it defaults to 200GiB.
+	MAX_DISK_SPACE_VAR = "MAX_L2_DISK_SPACE_ENV"
+
+	FIL_ADDRESS_VAR = "FIL_WALLET_ADDRESS_ENV"
 )
 
 var (
-	defaultMaxSize = uint64(200 * 1073741824) // 200 Gib
+	gateway_base_url = "https://ipfs.io/api/v0/dag/export"
+	defaultMaxSize   = uint64(200 * 1073741824) // 200 Gib
 )
 
 type config struct {
@@ -112,8 +122,7 @@ func main() {
 		os.Exit(4)
 	}
 
-
-	port = nl.Addr().(*net.TCPAddr).Port
+	port := nl.Addr().(*net.TCPAddr).Port
 	fmt.Println("Server listening on", nl.Addr())
 	fmt.Printf("WebUI: http://localhost:%d/webui\n", port)
 
@@ -196,7 +205,7 @@ func buildCarServer(cfg config) (*CARServer, error) {
 	}
 
 	sapi := carserver.NewStationAPIImpl(dss, nil)
-	gwApi := carstore.NewGatewayAPI(IPFS_GATEWAY_BASE_URL, sapi)
+	gwApi := carstore.NewGatewayAPI(gateway_base_url, sapi)
 	carStoreConfig := carstore.Config{
 		MaxCARFilesDiskSpace: int64(cfg.MaxDiskSpace),
 	}
