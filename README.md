@@ -62,22 +62,22 @@ At present, the L2 implementation is in it's V0 state with the following feature
 
    Note that before running the binary, you need to configure the following environment variables:
    ```
-   1. `PORT_ENV`
-       `PORT_ENV` is the environment variable that determines the port the saturn L2 service will bind to.
+   1. `PORT`
+       `PORT` is the environment variable that determines the port the saturn L2 service will bind to.
 	    If this environment variable is not configured, this service will bind to any available port.
 
-   2. `ROOT_DIR_ENV`
-       `ROOT_DIR_ENV is the environment variable that determines the root directory of the Saturn L2 Node.
+   2. `ROOT_DIR`
+       `ROOT_DIR` is the environment variable that determines the root directory of the Saturn L2 Node.
 	    All persistent state and cached CAR files will be persisted under this directory.
 	    Note: This is a mandatory environment variable -> no default for now.
 
-   3. `MAX_L2_DISK_SPACE_ENV`
-       `MAX_L2_DISK_SPACE_ENV is the environment variable that determines the maximum disk space the L2 node
+   3. `MAX_L2_DISK_SPACE`
+       `MAX_L2_DISK_SPACE` is the environment variable that determines the maximum disk space the L2 node
 	   can use to store cached CAR files. If this env variable is not configured, it defaults to 200GiB.
 	    Note: The configured value should be greater than or equal to 200Gib.
 
-   4. `FIL_WALLET_ADDRESS_ENV`
-       `FIL_WALLET_ADDRESS_ENV` is the environment variable that determines the Filecoin wallet address of the L2 user.
+   4. `FIL_WALLET_ADDRESS`
+       `FIL_WALLET_ADDRESS` is the environment variable that determines the Filecoin wallet address of the L2 user.
 	    Note: This is a mandatory environment variable -> no default.
    ```
 
