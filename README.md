@@ -132,7 +132,7 @@ Response:
   Status Codes:
   404 -> L2 does not have the requested content.
   200 -> L2 has the requested content and CAR file bytes will be streamed back.
-  400 -> Internal L2 error that we should probably look into.
+  500 -> Internal L2 error that we should probably look into.
   ```
 
 
