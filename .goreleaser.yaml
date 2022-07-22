@@ -13,7 +13,10 @@ builds:
       - linux
       - windows
       - darwin
-    main: ./main
+    ignore:
+    - goos: windows
+      goarch: arm64
+    main: ./cmd/saturn-l2
 
 archives:
   - replacements:
