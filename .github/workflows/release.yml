@@ -26,7 +26,7 @@ jobs:
         with:
           repository: filecoin-project/saturn-webui
           # Update tag to deploy new web UI.
-          tag: v0.0.15
+          tag: v0.0.16
           fileName: saturn-webui.tar.gz
           out-file-path: resources/webui
       -
