@@ -149,10 +149,10 @@ func mkConfig() (config, error) {
 	// parse FIL address
 	filAddr := os.Getenv(FIL_ADDRESS_VAR)
 	if filAddr == "" {
-		return config{}, errors.New("No FIL_WALLET_ADDRESS provided. Please set the environment variable.\n")
+		return config{}, fmt.Errorf("No %s provided. Please set the environment variable.\n", FIL_ADDRESS_VAR)
 	}
 	if _, err := address.NewFromString(filAddr); err != nil {
-		return config{}, fmt.Errorf("Invalid FIL_WALLET_ADDRESS format: %w", err)
+		return config{}, fmt.Errorf("Invalid %s format: %w", FIL_ADDRESS_VAR, err)
 	}
 
 	// parse max disk space
