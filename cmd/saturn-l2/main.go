@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -170,10 +171,11 @@ func mkConfig() (config, error) {
 		}
 	}
 
-	rootDirStr := os.Getenv(ROOT_DIR_ENV_VAR)
-	if rootDirStr == "" {
-		return config{}, errors.New("No ROOT_DIR provided. Please set the environment variable.")
+	rootDirStr, err := getRootDir()
+	if err != nil {
+		return config{}, err
 	}
+	fmt.Printf("Using root dir %s\n", rootDirStr)
 
 	return config{
 		Port:         port,
@@ -282,4 +284,25 @@ func newDatastore(dir string) (ds.Batching, error) {
 		return nil, fmt.Errorf("failed to open datastore: %w", err)
 	}
 	return dstore, nil
+}
+
+func getRootDir() (string, error) {
+	if dir := os.Getenv(ROOT_DIR_ENV_VAR); dir != "" {
+		abs, _ := filepath.Abs(dir)
+		return abs, nil
+	}
+
+	if runtime.GOOS == "windows" {
+		if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
+			return localAppData + "/saturn", nil
+		}
+
+		return "", errors.New("invalid Windows environment: LOCALAPPDATA is not set")
+	}
+
+	if home := os.Getenv("HOME"); home != "" {
+		return home + "/.saturn", nil
+	}
+
+	return "", errors.New("invalid environment: HOME is not set")
 }
