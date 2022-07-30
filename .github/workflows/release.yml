@@ -24,9 +24,9 @@ jobs:
         name: Include web UI
         uses: robinraju/release-downloader@v1.3
         with:
-          repository: filecoin-project/saturn-webui
+          repository: filecoin-saturn/node-webui
           # Update tag to deploy new web UI.
-          tag: v0.0.17
+          tag: v0.0.18
           fileName: saturn-webui.tar.gz
           out-file-path: resources/webui
       -
