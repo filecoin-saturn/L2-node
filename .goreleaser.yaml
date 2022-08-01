@@ -17,6 +17,7 @@ builds:
     - goos: windows
       goarch: arm64
     main: ./cmd/saturn-l2
+    binary: saturn-L2-node
 
 archives:
   - replacements:
