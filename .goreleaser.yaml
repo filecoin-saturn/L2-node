@@ -7,17 +7,29 @@ before:
     # you may remove this if you don't need go generate
     - go generate ./...
 builds:
-  - env:
-      - CGO_ENABLED=0
+  - binary: saturn-L2-node
+    id: saturn-L2-node
     goos:
       - linux
       - windows
-      - darwin
     ignore:
     - goos: windows
       goarch: arm64
     main: ./cmd/saturn-l2
-    binary: saturn-L2-node
+    env:
+      - CGO_ENABLED=0
+  - binary: saturn-L2-node
+    id: saturn-L2-node-macos
+    goos:
+    - darwin
+    goarch:
+    - amd64
+    hooks:
+      post:
+      - gon gon.hcl
+    main: ./cmd/saturn-l2
+    env:
+      - CGO_ENABLED=0
 
 archives:
   - replacements:
