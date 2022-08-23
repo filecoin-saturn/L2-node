@@ -48,6 +48,12 @@ jobs:
         with:
           go-version: 1.18
       -
+        name: Install gon
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew tap mitchellh/gon
+          brew install mitchellh/gon/gon
+      -
         name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v2
         with:
