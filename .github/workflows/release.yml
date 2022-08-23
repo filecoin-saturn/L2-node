@@ -33,6 +33,7 @@ jobs:
           tag: v0.0.19
           fileName: saturn-webui.tar.gz
           out-file-path: resources/webui
+          token: ${{ secrets.GITHUB_TOKEN }}
       -
         name: Unpack web UI archive
         run: |
