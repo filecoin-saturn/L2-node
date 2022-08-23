@@ -1,16 +1,16 @@
 name: goreleaser
 
 on:
+  pull_request:
   push:
     # run only against tags
-    tags:
-      - '*'
+    # tags:
+    #  - '*'
 
 permissions:
   contents: write
   # packages: write
   # issues: write
-
 
 jobs:
   goreleaser:
