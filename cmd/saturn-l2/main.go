@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -34,6 +36,8 @@ import (
 	"github.com/filecoin-project/saturn-l2/resources"
 )
 
+type L1IPAddrs []string
+
 const (
 	// PORT_ENV_VAR is the environment variable that determines the port the saturn L2 service will bind to.
 	// If this environment variable is not configured, this service will bind to any available port.
@@ -49,19 +53,25 @@ const (
 	MAX_DISK_SPACE_VAR = "MAX_L2_DISK_SPACE"
 
 	FIL_ADDRESS_VAR = "FIL_WALLET_ADDRESS"
+
+	// L1_DISCOVERY_URL_VAR configures the environment variable that determines the URL of the L1 Discovery API to invoke to
+	// get back the L1 nodes this L2 node will connect and serve CAR files to.
+	L1_DISCOVERY_URL_VAR = "L1_DISCOVERY_API_URL"
 )
 
 var (
 	gateway_base_url = "https://ipfs.io/api/v0/dag/export"
 	defaultMaxSize   = uint64(200 * 1073741824) // 200 Gib
 	idFile           = ".l2Id"
+	maxRequestSize   = int64(1048576) // 1 MiB - max size of http request and responses
 )
 
 type config struct {
-	Port         int
-	FilAddr      string `json:"fil_wallet_address"`
-	MaxDiskSpace uint64
-	RootDir      string
+	Port              int
+	FilAddr           string `json:"fil_wallet_address"`
+	MaxDiskSpace      uint64
+	RootDir           string
+	L1DiscoveryAPIUrl string
 }
 
 func main() {
@@ -92,6 +102,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Failed to serialise config: %s\n", err.Error())
 		os.Exit(2)
 	}
+
+	l1IPAddrs, err := getNearestL1s(cfg.L1DiscoveryAPIUrl)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to get nearest L1s to connect to: %s\n", err.Error())
+		os.Exit(2)
+	}
+	fmt.Println("\n L1 IP Addresses returned by L1 Discovery Service are\n", strings.Join(l1IPAddrs, ", "))
 
 	carserver, err := buildCarServer(cfg)
 	if err != nil {
@@ -199,12 +216,45 @@ func mkConfig() (config, error) {
 
 	fmt.Printf("Using root dir %s\n", rootDirStr)
 
+	durl := os.Getenv(L1_DISCOVERY_URL_VAR)
+	if _, err := url.Parse(durl); err != nil {
+		return config{}, fmt.Errorf("l1 discovery api url is invalid, failed to parse, err=%w", err)
+	}
+
 	return config{
-		Port:         port,
-		FilAddr:      filAddr,
-		MaxDiskSpace: maxDiskSpace,
-		RootDir:      rootDirStr,
+		Port:              port,
+		FilAddr:           filAddr,
+		MaxDiskSpace:      maxDiskSpace,
+		RootDir:           rootDirStr,
+		L1DiscoveryAPIUrl: durl,
 	}, nil
+}
+
+func getNearestL1s(discoveryUrl string) (L1IPAddrs, error) {
+	resp, err := http.DefaultClient.Get(discoveryUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call l1 discovery API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	rd := io.LimitReader(resp.Body, maxRequestSize)
+	l1ips, err := ioutil.ReadAll(rd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read l1 discovery response: %w", err)
+	}
+
+	var l1IPAddrs []string
+	if err := json.Unmarshal(l1ips, &l1IPAddrs); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal l1 addresses: %w", err)
+	}
+
+	for _, s := range l1IPAddrs {
+		if ip := net.ParseIP(s); ip == nil {
+			return nil, fmt.Errorf("l1 IP returned by L1 Discovery API is invalid, ip=%s", ip)
+		}
+	}
+
+	return l1IPAddrs, nil
 }
 
 type CARServer struct {
