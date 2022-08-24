@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -13,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	logging "github.com/ipfs/go-log/v2"
 
@@ -51,6 +54,7 @@ const (
 var (
 	gateway_base_url = "https://ipfs.io/api/v0/dag/export"
 	defaultMaxSize   = uint64(200 * 1073741824) // 200 Gib
+	idFile           = ".l2Id"
 )
 
 type config struct {
@@ -69,6 +73,19 @@ func main() {
 		fmt.Fprintf(os.Stderr, "failed to build config: %s", err.Error())
 		os.Exit(2)
 	}
+
+	// generate L2 UUID if this is the first run
+	id, err := readL2IdIfExists(cfg.RootDir)
+	if err != nil {
+		path := idFilePath(cfg.RootDir)
+		_ = os.Remove(path)
+		id = uuid.New()
+		if err := ioutil.WriteFile(path, []byte(id.String()), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to write L2 Id to file: %s", err.Error())
+			os.Exit(2)
+		}
+	}
+	fmt.Println("\n L2 Node Id is ", id.String())
 
 	cfgJson, err := json.Marshal(cfg)
 	if err != nil {
@@ -175,6 +192,11 @@ func mkConfig() (config, error) {
 	if err != nil {
 		return config{}, err
 	}
+
+	if _, err := os.Stat(rootDirStr); err != nil {
+		return config{}, fmt.Errorf("root dir %s does NOT exist", rootDirStr)
+	}
+
 	fmt.Printf("Using root dir %s\n", rootDirStr)
 
 	return config{
@@ -305,4 +327,29 @@ func getRootDir() (string, error) {
 	}
 
 	return "", errors.New("invalid environment: HOME is not set")
+}
+
+// returns the l2 id by reading it from the id file if it exists, otherwise returns error.
+func readL2IdIfExists(root string) (uuid.UUID, error) {
+	path := idFilePath(root)
+	_, err := os.Stat(path)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+
+	bz, err := ioutil.ReadFile(path)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+
+	u, err := uuid.Parse(string(bz))
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+
+	return u, nil
+}
+
+func idFilePath(rootDir string) string {
+	return filepath.Join(rootDir, idFile)
 }
