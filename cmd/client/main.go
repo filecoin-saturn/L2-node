@@ -67,8 +67,8 @@ func main() {
 
 func mkRequestWithoutSelector(root cid.Cid) []byte {
 	req := types.CARTransferRequest{
-		Root:  base64.StdEncoding.EncodeToString(root.Bytes()),
-		ReqId: uuid.New().String(),
+		Root:      base64.StdEncoding.EncodeToString(root.Bytes()),
+		RequestId: uuid.New().String(),
 	}
 	reqBz, err := json.Marshal(req)
 	if err != nil {

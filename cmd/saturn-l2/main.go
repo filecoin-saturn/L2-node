@@ -11,11 +11,16 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
+
+	"github.com/filecoin-project/saturn-l2/l1interop"
 
 	"github.com/google/uuid"
 
@@ -38,6 +43,8 @@ import (
 
 type L1IPAddrs []string
 
+var log = logging.Logger("saturn-l2")
+
 const (
 	// PORT_ENV_VAR is the environment variable that determines the port the saturn L2 service will bind to.
 	// If this environment variable is not configured, this service will bind to any available port.
@@ -57,80 +64,161 @@ const (
 	// L1_DISCOVERY_URL_VAR configures the environment variable that determines the URL of the L1 Discovery API to invoke to
 	// get back the L1 nodes this L2 node will connect and serve CAR files to.
 	L1_DISCOVERY_URL_VAR = "L1_DISCOVERY_API_URL"
+
+	// MAX_L1_CONNECTIONS_VAR configures the environment variable that determines the maximum
+	// number of L1s this L2 will connect to and join the swarm for. Defaults to 100.
+	MAX_L1_CONNECTIONS_VAR = "MAX_L1_CONNECTIONS"
+
+	// MAX_CONCURRENT_L1_REQUESTS_VAR configures the environment variable that determines the maximum
+	// number of requests that will be served concurrently to a single L1. defaults to 3.
+	MAX_CONCURRENT_L1_REQUESTS_VAR = "MAX_CONCURRENT_L1_REQUESTS"
 )
 
 var (
-	gateway_base_url = "https://ipfs.io/api/v0/dag/export"
-	defaultMaxSize   = uint64(200 * 1073741824) // 200 Gib
-	idFile           = ".l2Id"
-	maxRequestSize   = int64(1048576) // 1 MiB - max size of http request and responses
+	gateway_base_url           = "https://ipfs.io/api/v0/dag/export"
+	defaultMaxDiskSpace        = uint64(200 * 1073741824) // 200 Gib
+	idFile                     = ".l2Id"
+	maxL1DiscoveryResponseSize = int64(1048576) // 1 MiB - max size of http request and responses
+	// default maximum of the number of L1s this L2 node will connect to
+	defaultMaxL1s = 100
+	// timeout of the request we make to discover L1s
+	l1_discovery_timeout = 5 * time.Minute
+	// number of maximum connections to a single L1
+	maxConnsPerL1 = 5
+	// we are okay having upto 500 long running idle connections with L1s
+	totalMaxIdleL1Conns = 500
+	// in-activity timeout before we close an idle connection to an L1
+	idleL1ConnTimeout = 30 * time.Minute
+	// DNS Hostname of Saturn L1 Nodes
+	saturn_l1_hostName = "strn.pl"
+
+	defaultMaxL1ConcurrentRequests = 3
 )
 
 type config struct {
-	Port              int
-	FilAddr           string `json:"fil_wallet_address"`
-	MaxDiskSpace      uint64
-	RootDir           string
-	L1DiscoveryAPIUrl string
+	Port                    int
+	FilAddr                 string `json:"fil_wallet_address"`
+	MaxDiskSpace            uint64
+	RootDir                 string
+	L1DiscoveryAPIUrl       string
+	MaxL1Connections        int
+	MaxConcurrentL1Requests int
 }
 
 func main() {
-	logging.SetAllLoggers(logging.LevelInfo)
+	// build app context
+	cleanup := func() {
 
-	ctx := context.Background()
+	}
+	defer cleanup()
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		cleanup()
+	}()
+
+	logging.SetAllLoggers(logging.LevelInfo)
+	ctx, cancel := context.WithCancel(context.Background())
+	cleanup = updateCleanup(cleanup, func() {
+		log.Info("shutting down all threads")
+		cancel()
+	})
+
+	// build L2 config
 	cfg, err := mkConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to build config: %s", err.Error())
 		os.Exit(2)
 	}
+	log.Infow("parsed config", "cfg", cfg)
 
 	// generate L2 UUID if this is the first run
-	id, err := readL2IdIfExists(cfg.RootDir)
+	l2Id, err := readL2IdIfExists(cfg.RootDir)
 	if err != nil {
-		path := idFilePath(cfg.RootDir)
-		_ = os.Remove(path)
-		id = uuid.New()
-		if err := ioutil.WriteFile(path, []byte(id.String()), 0644); err != nil {
+		l2Id, err = createAndPersistL2Id(cfg.RootDir)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to write L2 Id to file: %s", err.Error())
 			os.Exit(2)
 		}
 	}
-	fmt.Println("\n L2 Node Id is ", id.String())
+	log.Infow("read l2 node Id", "l2Id", l2Id)
 
 	cfgJson, err := json.Marshal(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to serialise config: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "failed to serialise config: %s\n", err.Error())
 		os.Exit(2)
 	}
 
-	l1IPAddrs, err := getNearestL1s(cfg.L1DiscoveryAPIUrl)
+	// get the Nearest L1s by talking to the orchestrator
+	log.Info("waiting to discover L1s...")
+	l1IPAddrs, err := getNearestL1s(ctx, cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to get nearest L1s to connect to: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "failed to get nearest L1s to connect to: %s\n", err.Error())
 		os.Exit(2)
 	}
-	fmt.Println("\n L1 IP Addresses returned by L1 Discovery Service are\n", strings.Join(l1IPAddrs, ", "))
+	log.Infow("discovered L1s", "l1 IP Addrs", strings.Join(l1IPAddrs, ", "))
 
-	carserver, err := buildCarServer(cfg)
+	// build the saturn logger
+	logger := logs.NewSaturnLogger()
+
+	// build a robust http client to use to connect and serve CAR files to L1s
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.MaxIdleConns = totalMaxIdleL1Conns
+	tr.MaxConnsPerHost = maxConnsPerL1
+	tr.MaxIdleConnsPerHost = maxConnsPerL1 // number of maximum idle connections to a single L1
+	tr.IdleConnTimeout = idleL1ConnTimeout
+	tr.TLSClientConfig.ServerName = saturn_l1_hostName
+	l1HttpClient := &http.Client{
+		Transport: tr,
+	}
+
+	// build and start the CAR server
+	carserver, err := buildCarServer(cfg, logger)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to build http car server: %s", err.Error())
+		fmt.Fprintf(os.Stderr, "failed to build car server: %s", err.Error())
 		os.Exit(2)
 	}
 	if err := carserver.Start(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to start car server: %s", err.Error())
+		fmt.Fprintf(os.Stderr, "failed to start car server: %s", err.Error())
 		os.Exit(2)
 	}
-	defer carserver.Stop(ctx)
+	cleanup = updateCleanup(cleanup, func() {
+		log.Info("shutting down the CAR server")
+		carserver.Stop(ctx)
+	})
+
+	// Connect and register with all L1s and start serving their requests
+	var l1wg sync.WaitGroup
+	for _, l1ip := range l1IPAddrs {
+		l1ip := l1ip
+		l1client := l1interop.New(l2Id.String(), l1HttpClient, logger, carserver.server, l1ip, cfg.MaxConcurrentL1Requests)
+		cleanup = updateCleanup(cleanup, func() {
+			log.Infow("closing connection with l1", "l1", l1ip)
+			l1client.Stop()
+			log.Infow("finished closing connection with l1", "l1", l1ip)
+		})
+		l1wg.Add(1)
+		go func() {
+			defer l1wg.Done()
+			if err := l1client.Start(); err != nil {
+				if !errors.Is(err, context.Canceled) {
+					log.Errorw("failed to connect to L1", "l1", l1ip, "err", err)
+				}
+			}
+		}()
+	}
+	cleanup = updateCleanup(cleanup, func() {
+		log.Info("waiting for all l1 connections to be torn down")
+		l1wg.Wait()
+		log.Info("finished tearing down all l1 connections")
+	})
 
 	m := mux.NewRouter()
 	m.PathPrefix("/config").Handler(http.HandlerFunc(configHandler(cfgJson)))
 	m.PathPrefix("/webui").Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		webuiHandler(cfg, w, r)
 	}))
-
-	carServerHandler := http.TimeoutHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		carserver.server.ServeCARFile(w, r)
-	}), 10*time.Minute, "timed out")
-	m.PathPrefix("/dag/car").Handler(carServerHandler)
 
 	m.PathPrefix("/stats").Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ss, err := carserver.sapi.AllStats(r.Context())
@@ -150,10 +238,14 @@ func main() {
 	srv := &http.Server{
 		Handler: m,
 	}
+	cleanup = updateCleanup(cleanup, func() {
+		log.Info("shutting down the http server")
+		_ = srv.Close()
+	})
 
 	nl, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", cfg.Port))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot start the webserver: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "cannot start the webserver: %s\n", err.Error())
 		os.Exit(4)
 	}
 
@@ -162,7 +254,14 @@ func main() {
 	fmt.Printf("WebUI: http://localhost:%d/webui\n", port)
 
 	if err := srv.Serve(nl); err != http.ErrServerClosed {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "error shutting down the server: %s", err.Error())
+	}
+}
+
+func updateCleanup(oldFunc func(), newFunc func()) func() {
+	return func() {
+		oldFunc()
+		newFunc()
 	}
 }
 
@@ -193,14 +292,14 @@ func mkConfig() (config, error) {
 	var maxDiskSpace uint64
 	maxDiskSpaceStr := os.Getenv(MAX_DISK_SPACE_VAR)
 	if maxDiskSpaceStr == "" {
-		maxDiskSpace = defaultMaxSize
+		maxDiskSpace = defaultMaxDiskSpace
 	} else {
 		var err error
 		maxDiskSpace, err = strconv.ParseUint(maxDiskSpaceStr, 10, 64)
 		if err != nil {
 			return config{}, fmt.Errorf("failed to parse max disk size %s: %w", maxDiskSpaceStr, err)
 		}
-		if maxDiskSpace < defaultMaxSize {
+		if maxDiskSpace < defaultMaxDiskSpace {
 			return config{}, errors.New("max allocated disk space should be atleast 200GiB")
 		}
 	}
@@ -216,28 +315,71 @@ func mkConfig() (config, error) {
 
 	fmt.Printf("Using root dir %s\n", rootDirStr)
 
-	durl := os.Getenv(L1_DISCOVERY_URL_VAR)
+	durl, exists := os.LookupEnv(L1_DISCOVERY_URL_VAR)
+	if !exists {
+		return config{}, errors.New("please configure the L1_DISCOVERY_API_URL environment variable")
+	}
+
 	if _, err := url.Parse(durl); err != nil {
 		return config{}, fmt.Errorf("l1 discovery api url is invalid, failed to parse, err=%w", err)
 	}
 
+	var maxL1Conns int64
+	maxL1ConnsStr := os.Getenv(MAX_L1_CONNECTIONS_VAR)
+	if maxL1ConnsStr == "" {
+		maxL1Conns = int64(defaultMaxL1s)
+	} else {
+		var err error
+		maxL1Conns, err = strconv.ParseInt(maxL1ConnsStr, 10, 32)
+		if err != nil {
+			return config{}, fmt.Errorf("failed to parse max l1 conns %d: %w", maxL1Conns, err)
+		}
+		if maxL1Conns <= 0 {
+			return config{}, errors.New("max number of l1 conns should be positive")
+		}
+	}
+
+	var maxConcurrentL1Reqs int64
+	maxConcurrentL1ReqsStr := os.Getenv(MAX_CONCURRENT_L1_REQUESTS_VAR)
+	if maxConcurrentL1ReqsStr == "" {
+		maxConcurrentL1Reqs = int64(defaultMaxL1ConcurrentRequests)
+	} else {
+		var err error
+		maxConcurrentL1Reqs, err = strconv.ParseInt(maxConcurrentL1ReqsStr, 10, 32)
+		if err != nil {
+			return config{}, fmt.Errorf("failed to parse max concurrent l1 requests %s: %w", maxConcurrentL1ReqsStr, err)
+		}
+	}
+
 	return config{
-		Port:              port,
-		FilAddr:           filAddr,
-		MaxDiskSpace:      maxDiskSpace,
-		RootDir:           rootDirStr,
-		L1DiscoveryAPIUrl: durl,
+		Port:                    port,
+		FilAddr:                 filAddr,
+		MaxDiskSpace:            maxDiskSpace,
+		RootDir:                 rootDirStr,
+		L1DiscoveryAPIUrl:       durl,
+		MaxL1Connections:        int(maxL1Conns),
+		MaxConcurrentL1Requests: int(maxConcurrentL1Reqs),
 	}, nil
 }
 
-func getNearestL1s(discoveryUrl string) (L1IPAddrs, error) {
-	resp, err := http.DefaultClient.Get(discoveryUrl)
+func getNearestL1s(ctx context.Context, cfg config) (L1IPAddrs, error) {
+	client := &http.Client{
+		Timeout: l1_discovery_timeout,
+	}
+
+	req, err := http.NewRequest(http.MethodGet, cfg.L1DiscoveryAPIUrl, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request to L1 Discovery API")
+	}
+	req = req.WithContext(ctx)
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call l1 discovery API: %w", err)
 	}
 	defer resp.Body.Close()
 
-	rd := io.LimitReader(resp.Body, maxRequestSize)
+	rd := io.LimitReader(resp.Body, maxL1DiscoveryResponseSize)
 	l1ips, err := ioutil.ReadAll(rd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read l1 discovery response: %w", err)
@@ -254,11 +396,15 @@ func getNearestL1s(discoveryUrl string) (L1IPAddrs, error) {
 		}
 	}
 
+	if cfg.MaxL1Connections < len(l1IPAddrs) {
+		l1IPAddrs = l1IPAddrs[:cfg.MaxL1Connections]
+	}
+
 	return l1IPAddrs, nil
 }
 
 type CARServer struct {
-	server *carserver.HTTPCARServer
+	server *carserver.CarServer
 	store  *carstore.CarStore
 	sapi   station.StationAPI
 }
@@ -267,12 +413,11 @@ func (cs *CARServer) Start(ctx context.Context) error {
 	return cs.store.Start(ctx)
 }
 
-func (cs *CARServer) Stop(ctx context.Context) error {
-	return cs.store.Close()
+func (cs *CARServer) Stop(_ context.Context) error {
+	return cs.store.Stop()
 }
 
-func buildCarServer(cfg config) (*CARServer, error) {
-	logger := logs.NewSaturnLogger()
+func buildCarServer(cfg config, logger *logs.SaturnLogger) (*CARServer, error) {
 	dss, err := newDatastore(filepath.Join(cfg.RootDir, "statestore"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create state datastore: %w", err)
@@ -377,6 +522,16 @@ func getRootDir() (string, error) {
 	}
 
 	return "", errors.New("invalid environment: HOME is not set")
+}
+
+func createAndPersistL2Id(root string) (uuid.UUID, error) {
+	path := idFilePath(root)
+	_ = os.Remove(path)
+	l2Id := uuid.New()
+	if err := ioutil.WriteFile(path, []byte(l2Id.String()), 0644); err != nil {
+		return uuid.UUID{}, err
+	}
+	return l2Id, nil
 }
 
 // returns the l2 id by reading it from the id file if it exists, otherwise returns error.
