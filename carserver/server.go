@@ -1,10 +1,9 @@
 package carserver
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"io"
-	"net/http"
 
 	"github.com/filecoin-project/saturn-l2/types"
 
@@ -14,8 +13,6 @@ import (
 
 	"github.com/filecoin-project/saturn-l2/carstore"
 
-	"github.com/pkg/errors"
-
 	bstore "github.com/ipfs/go-ipfs-blockstore"
 
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -24,79 +21,54 @@ import (
 	car "github.com/ipld/go-car/v2"
 )
 
-var (
-	maxRequestSize = int64(1048576) // 1 MiB - max size of the CAR transfer request
-)
-
-// HTTPCARServer serves CAR files for a given root and selector over http.
-type HTTPCARServer struct {
+// CarServer serves CAR files for a given root and selector.
+type CarServer struct {
 	cs     *carstore.CarStore
 	logger *logs.SaturnLogger
 	spai   station.StationAPI
 }
 
-func New(cs *carstore.CarStore, logger *logs.SaturnLogger, sapi station.StationAPI) *HTTPCARServer {
-	return &HTTPCARServer{
+func New(cs *carstore.CarStore, logger *logs.SaturnLogger, sapi station.StationAPI) *CarServer {
+	return &CarServer{
 		cs:     cs,
 		logger: logger,
 		spai:   sapi,
 	}
 }
 
-func (l *HTTPCARServer) ServeCARFile(w http.ResponseWriter, r *http.Request) {
-	// read the json car transfer request
-	var req types.CARTransferRequest
-	r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("failed to parse request: %s", err), http.StatusBadRequest)
-		return
-	}
-	dr, err := req.ToDAGRequest()
-	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to parse request: %s", err), http.StatusBadRequest)
-		return
-	}
-
-	// we have parsed the request successfully -> start logging and serving it
-	l.logger.Infow(dr.ReqId, "got car transfer request")
-
+func (l *CarServer) ServeCARFile(ctx context.Context, dr *types.DagTraversalRequest, w io.Writer) error {
 	sw := &statWriter{w: w}
 
-	if err := l.cs.FetchAndWriteCAR(dr.ReqId, dr.Root, func(ro bstore.Blockstore) error {
+	if err := l.cs.FetchAndWriteCAR(dr.RequestId, dr.Root, func(ro bstore.Blockstore) error {
 		ls := cidlink.DefaultLinkSystem()
 		bsa := bsadapter.Adapter{Wrapped: ro}
 		ls.SetReadStorage(&bsa)
 
-		_, err = car.TraverseV1(r.Context(), &ls, dr.Root, dr.Selector, sw, car.WithSkipOffset(dr.Skip))
+		_, err := car.TraverseV1(ctx, &ls, dr.Root, dr.Selector, sw, car.WithSkipOffset(dr.SkipOffset))
 		if err != nil {
-			if err := l.spai.RecordRetrievalServed(r.Context(), sw.n, 1); err != nil {
-				l.logger.LogError(dr.ReqId, "failed to record retrieval failure", err)
+			if err := l.spai.RecordRetrievalServed(ctx, sw.n, 1); err != nil {
+				l.logger.LogError(dr.RequestId, "failed to record retrieval failure", err)
 			}
 
-			l.logger.LogError(dr.ReqId, "car transfer failed", err)
+			l.logger.LogError(dr.RequestId, "car traversal failed", err)
 			return fmt.Errorf("car traversal failed: %w", err)
 		}
 
-		if err := l.spai.RecordRetrievalServed(r.Context(), sw.n, 0); err != nil {
-			l.logger.LogError(dr.ReqId, "failed to record successful retrieval", err)
+		if err := l.spai.RecordRetrievalServed(ctx, sw.n, 0); err != nil {
+			l.logger.LogError(dr.RequestId, "failed to record successful retrieval", err)
 		}
 		return nil
 	}); err != nil {
-		if err := l.spai.RecordRetrievalServed(r.Context(), sw.n, 1); err != nil {
-			l.logger.LogError(dr.ReqId, "failed to record retrieval failure", err)
+		if err := l.spai.RecordRetrievalServed(ctx, sw.n, 1); err != nil {
+			l.logger.LogError(dr.RequestId, "failed to record retrieval failure", err)
 		}
-		l.logger.LogError(dr.ReqId, "failed to server car", err)
+		l.logger.LogError(dr.RequestId, "failed to traverse and serve car", err)
 
-		if errors.Is(err, carstore.ErrNotFound) {
-			http.Error(w, "car not found", http.StatusNotFound)
-		} else {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
+		return err
 	}
 
-	l.logger.Infow(dr.ReqId, "car transfer successful")
-	// TODO: Talk to Log injestor here
+	l.logger.Infow(dr.RequestId, "car transfer successful")
+	return nil
 }
 
 type statWriter struct {

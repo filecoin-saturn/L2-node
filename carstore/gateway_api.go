@@ -23,12 +23,17 @@ type GatewayAPI interface {
 var _ GatewayAPI = (*gatewayAPI)(nil)
 
 type gatewayAPI struct {
+	client  *http.Client
 	baseURL string
 	sApi    station.StationAPI
 }
 
 func NewGatewayAPI(baseURL string, sApi station.StationAPI) *gatewayAPI {
+	client := &http.Client{
+		Timeout: defaultDownloadTimeout,
+	}
 	return &gatewayAPI{
+		client:  client,
 		baseURL: baseURL,
 		sApi:    sApi,
 	}
@@ -43,7 +48,7 @@ func (g *gatewayAPI) Fetch(ctx context.Context, rootCID cid.Cid) (mount.Reader, 
 	q.Add("arg", rootCID.String())
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := g.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute http request")
 	}

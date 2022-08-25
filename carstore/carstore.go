@@ -43,7 +43,7 @@ var (
 	maxConcurrentReadyFetches = 3
 	secondMissDuration        = 24 * time.Hour
 	maxRecoverAttempts        = uint64(1)
-	defaultDownloadTimeout    = 20 * time.Minute
+	defaultDownloadTimeout    = 30 * time.Minute
 )
 
 var (
@@ -211,7 +211,7 @@ func (cs *CarStore) gcTraceLoop() {
 	}
 }
 
-func (cs *CarStore) Close() error {
+func (cs *CarStore) Stop() error {
 	log.Info("shutting down the carstore")
 	// Cancel the context
 	cs.cancel()

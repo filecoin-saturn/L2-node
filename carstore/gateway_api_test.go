@@ -22,9 +22,7 @@ func TestGatewayAPI(t *testing.T) {
 	svc := testutils.GetTestServer(t, root, bz)
 	defer svc.Close()
 
-	gw := &gatewayAPI{
-		baseURL: svc.URL,
-	}
+	gw := NewGatewayAPI(svc.URL, nil)
 
 	c, err := cid.Decode(root)
 	require.NoError(t, err)
@@ -45,9 +43,7 @@ func TestGatewayAPIFailure(t *testing.T) {
 	defer svc.Close()
 
 	ctx := context.Background()
-	gw := &gatewayAPI{
-		baseURL: svc.URL,
-	}
+	gw := NewGatewayAPI(svc.URL, nil)
 
 	c, err := cid.Decode(root)
 	require.NoError(t, err)
