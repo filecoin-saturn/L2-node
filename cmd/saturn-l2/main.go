@@ -51,8 +51,7 @@ const (
 	PORT_ENV_VAR = "PORT"
 
 	// ROOT_DIR_ENV_VAR is the environment variable that determines the root directory of the Saturn L2 Node.
-	// All persistent state and cached CAR files will be persisted under this directory.
-	// Mandatory environment variable -> no default for now.
+	// All persistent state and cached CAR files will be persisted under this directory. Defaults to $HOME/.saturn.
 	ROOT_DIR_ENV_VAR = "ROOT_DIR"
 
 	// MAX_DISK_SPACE_VAR configures the environment variable that determines the maximum disk space the L2 node can use to
@@ -65,34 +64,45 @@ const (
 	// get back the L1 nodes this L2 node will connect and serve CAR files to.
 	L1_DISCOVERY_URL_VAR = "L1_DISCOVERY_API_URL"
 
-	// MAX_L1_CONNECTIONS_VAR configures the environment variable that determines the maximum
+	// MAX_L1s_VAR configures the environment variable that determines the maximum
 	// number of L1s this L2 will connect to and join the swarm for. Defaults to 100.
-	MAX_L1_CONNECTIONS_VAR = "MAX_L1_CONNECTIONS"
+	MAX_L1s_VAR = "MAX_L1s"
 
 	// MAX_CONCURRENT_L1_REQUESTS_VAR configures the environment variable that determines the maximum
-	// number of requests that will be served concurrently to a single L1. defaults to 3.
+	// number of CAR file requests that will be processed concurrently for a single L1. defaults to 3.
 	MAX_CONCURRENT_L1_REQUESTS_VAR = "MAX_CONCURRENT_L1_REQUESTS"
 )
 
 var (
-	gateway_base_url           = "https://ipfs.io/api/v0/dag/export"
-	defaultMaxDiskSpace        = uint64(200 * 1073741824) // 200 Gib
-	idFile                     = ".l2Id"
-	maxL1DiscoveryResponseSize = int64(1048576) // 1 MiB - max size of http request and responses
+	gateway_base_url = "https://ipfs.io/api/v0/dag/export"
+
+	defaultMaxDiskSpace = uint64(200 * 1073741824) // 200 Gib
+
+	// file the L2 Node Id will be persisted to.
+	idFile = ".l2Id"
+
+	// 1 MiB
+	maxL1DiscoveryResponseSize = int64(1048576)
+
+	defaultMaxL1ConcurrentRequests = uint64(3)
+
 	// default maximum of the number of L1s this L2 node will connect to
-	defaultMaxL1s = 100
+	defaultMaxL1s = uint64(100)
+
 	// timeout of the request we make to discover L1s
 	l1_discovery_timeout = 5 * time.Minute
+
 	// number of maximum connections to a single L1
 	maxConnsPerL1 = 5
+
 	// we are okay having upto 500 long running idle connections with L1s
 	totalMaxIdleL1Conns = 500
+
 	// in-activity timeout before we close an idle connection to an L1
 	idleL1ConnTimeout = 30 * time.Minute
+
 	// DNS Hostname of Saturn L1 Nodes
 	saturn_l1_hostName = "strn.pl"
-
-	defaultMaxL1ConcurrentRequests = 3
 )
 
 type config struct {
@@ -289,66 +299,43 @@ func mkConfig() (config, error) {
 	}
 
 	// parse max disk space
-	var maxDiskSpace uint64
-	maxDiskSpaceStr := os.Getenv(MAX_DISK_SPACE_VAR)
-	if maxDiskSpaceStr == "" {
-		maxDiskSpace = defaultMaxDiskSpace
-	} else {
-		var err error
-		maxDiskSpace, err = strconv.ParseUint(maxDiskSpaceStr, 10, 64)
-		if err != nil {
-			return config{}, fmt.Errorf("failed to parse max disk size %s: %w", maxDiskSpaceStr, err)
-		}
-		if maxDiskSpace < defaultMaxDiskSpace {
-			return config{}, errors.New("max allocated disk space should be atleast 200GiB")
-		}
+	maxDiskSpace, err := readIntEnvVar(MAX_DISK_SPACE_VAR, defaultMaxDiskSpace)
+	if err != nil {
+		return config{}, fmt.Errorf("failed to parse max disk space env var: %w", err)
+	}
+	if maxDiskSpace < defaultMaxDiskSpace {
+		return config{}, errors.New("max allocated disk space should be atleast 200GiB")
 	}
 
+	// parse root directory
 	rootDirStr, err := getRootDir()
 	if err != nil {
 		return config{}, err
 	}
-
 	if _, err := os.Stat(rootDirStr); err != nil {
 		return config{}, fmt.Errorf("root dir %s does NOT exist", rootDirStr)
 	}
-
 	fmt.Printf("Using root dir %s\n", rootDirStr)
 
+	// parse L1 Discovery API URL
 	durl, exists := os.LookupEnv(L1_DISCOVERY_URL_VAR)
 	if !exists {
 		return config{}, errors.New("please configure the L1_DISCOVERY_API_URL environment variable")
 	}
-
 	if _, err := url.Parse(durl); err != nil {
 		return config{}, fmt.Errorf("l1 discovery api url is invalid, failed to parse, err=%w", err)
 	}
 
-	var maxL1Conns int64
-	maxL1ConnsStr := os.Getenv(MAX_L1_CONNECTIONS_VAR)
-	if maxL1ConnsStr == "" {
-		maxL1Conns = int64(defaultMaxL1s)
-	} else {
-		var err error
-		maxL1Conns, err = strconv.ParseInt(maxL1ConnsStr, 10, 32)
-		if err != nil {
-			return config{}, fmt.Errorf("failed to parse max l1 conns %d: %w", maxL1Conns, err)
-		}
-		if maxL1Conns <= 0 {
-			return config{}, errors.New("max number of l1 conns should be positive")
-		}
+	// parse max number of l1s to connect to
+	maxL1Conns, err := readIntEnvVar(MAX_L1s_VAR, defaultMaxL1s)
+	if err != nil {
+		return config{}, fmt.Errorf("failed to parse MAX_L1_CONNECTIONS_VAR env var: %w", err)
 	}
 
-	var maxConcurrentL1Reqs int64
-	maxConcurrentL1ReqsStr := os.Getenv(MAX_CONCURRENT_L1_REQUESTS_VAR)
-	if maxConcurrentL1ReqsStr == "" {
-		maxConcurrentL1Reqs = int64(defaultMaxL1ConcurrentRequests)
-	} else {
-		var err error
-		maxConcurrentL1Reqs, err = strconv.ParseInt(maxConcurrentL1ReqsStr, 10, 32)
-		if err != nil {
-			return config{}, fmt.Errorf("failed to parse max concurrent l1 requests %s: %w", maxConcurrentL1ReqsStr, err)
-		}
+	// parse max number of concurrent L1 requests to serve
+	maxConcurrentL1Reqs, err := readIntEnvVar(MAX_CONCURRENT_L1_REQUESTS_VAR, defaultMaxL1ConcurrentRequests)
+	if err != nil {
+		return config{}, fmt.Errorf("failed to parse MAX_CONCURRENT_L1_REQUESTS_VAR env var: %w", err)
 	}
 
 	return config{
@@ -557,4 +544,21 @@ func readL2IdIfExists(root string) (uuid.UUID, error) {
 
 func idFilePath(rootDir string) string {
 	return filepath.Join(rootDir, idFile)
+}
+
+func readIntEnvVar(name string, defaultVal uint64) (uint64, error) {
+	valStr := os.Getenv(name)
+	if valStr == "" {
+		return defaultVal, nil
+	}
+
+	val, err := strconv.ParseUint(valStr, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse environment variable  %s as integer: %w", valStr, err)
+	}
+	if val <= 0 {
+		return 0, errors.New("integer environment variable must be positive")
+	}
+
+	return val, nil
 }
