@@ -32,7 +32,7 @@ At present, the L2 implementation has the following features:
 
 - The dagstore is source agnostic and it should be relatively easy to swap out the IPFS Gateway with the Filecoin SP network down the line without changing the L2 implementation significantly.
 
-### HTTP API getting L2 node stats
+### HTTP API for fetching L2 node stats
 
 - The L2 node exposes an HTTP API to fetch stats that the operator/user of the L2 node might be interested in. These stats include the total amount of data downloaded by the L2 node, the amount of data served to other CDN peers by the L2 node etc etc.
 
