@@ -44,13 +44,12 @@ At present, the L2 implementation has the following features:
 
 - On it's first startup, the L2 node generates an Id(`L2Id`) for itself and persists it in the local file system. For all subsequent runs, the L2 node will reuse the persisted L2Id.
 
-- On every startup, the L2 node connects to the configured L1 Discovery API (See the `L1_DISCOVERY_API_URL` environment variabl below) to get back a list of L1 nodes to connect to.
+- On every startup, the L2 node connects to the configured L1 Discovery API (See the `L1_DISCOVERY_API_URL` environment variable below) to get back a list of L1 nodes to connect to.
 
 - The L2 node then picks a maximum of `MAX_L1s`(configurable environment variable) L1s from those recieved from the Discovery API and joins
   the "swarm" for all those L1s.
 
-   - The L2 node does this by invoking the GET `https://{L1_IP}/register/{L2Id}` registration API on the L1. The L1 should send back a 200 status code
-      and then keep the connection alive. 
+   - The L2 node joins an L1's Swarm by invoking the GET `https://{L1_IP}/register/{L2Id}` registration API on the L1. The L1 should send back a 200     status code and then keep the connection alive. 
    - The L2 node then starts reading requests for CAR files from the response stream of the registration call made above. The L1 should send a request as      new line delimited json. The request is currently of the form:
 
      ```
@@ -61,14 +60,14 @@ At present, the L2 implementation has the following features:
      } 
      ```
    - For each request, the L2 node serves the CAR file by invoking the POST `https://{L1_IP}/data/{Root}/{RequestId}` API on the L1.
-     The L2 will serve the CAR file only if has it. The L2 makes no guaruantees of giving a response for each request recieved from an L1.
+     The L2 will serve the CAR file only if has it. The L2 makes no guaruantees of sending back a POST response for each request recieved from an L1.
      If an L2 does not have a CAR file or if there's an error while serving the CAR file, the L2 will simply not send a POST or send some
-     invalid bytes(incomplete CAR file) in the POST. The L1 should always ensure that a CAR file stream send over POST ends with an `EOF` to ensure it has      read a complete valid CAR file.     
+     invalid bytes(incomplete CAR file) in the POST. The L1 should always ensure that a CAR file stream sent over POST ends with an `EOF` to ensure it has      read a complete valid CAR file.     
    - The number of concurrent requests that an L2 will serve for an L1 is configured using the `MAX_CONCURRENT_L1_REQUESTS` environment variable described      below.
    - Note: The L2 node also ships with an upper bound on the number of connections it makes to a single L1(5 for now) to prevent abuse. Connections will        be re-used to send responses for subsequent requests after an L1 has finished reading and closed the stream for an existing response over the              connection. If all connections are busy with ongoing responses, subsequent responses will block till a connection is available.
   
 
-- If it does not have the requested DAG, it simply returns a 404 so the client can fetch it directly from the IPFS Gateway. This decision was taken keeping in mind that it will be faster for the client to fetch the content directly from the IPFS Gateway rather than the client downloading it from the L2 which is itself downloading the content from the IPFS Gateway. This is because the L2 clients i.e. L1 Saturn nodes have significantly superior bandwidth compared to L2s. Low L2 uplink speeds without the benefits of geo-location and without the implementation of multi-peer L2 downloads can definitely become a bottleneck for L1s in the L2 cache miss scenario.
+- If an L2 does not have the requested DAG, it simply returns a 404 so the client can fetch it directly from the IPFS Gateway. This decision was taken keeping in mind that it will be faster for the client to fetch the content directly from the IPFS Gateway rather than the client downloading it from the L2 which is itself downloading the content from the IPFS Gateway. This is because the L2 clients i.e. L1 Saturn nodes have significantly superior bandwidth compared to L2s. Low L2 uplink speeds without the benefits of geo-location and without the implementation of multi-peer L2 downloads can definitely become a bottleneck for L1s in the L2 cache miss scenario.
 
 - The L2 network does NOT support parallel download of a DAG from multiple L2 nodes for now.
 
