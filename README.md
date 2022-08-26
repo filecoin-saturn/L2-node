@@ -162,28 +162,6 @@ Response:
 "NContentReqErrors":0}    -> Total number of errors encountered by the L2 node while serving content to client in it's entire lifetime.
 ```
 
-2. GET **/dag/car**
-
-  **Request**
-  ```
-  {"ReqId":"00c1d646-7b06-445f-9162-1966c670f37d", // UUID for the request -> used for referencing, logging and debugging. Mandatory.
-  "Root":"QmfMYyn8LUWEfRXfijKFjBAshSsPVRUgwLZzsD7kcTtX1A", // Base64 string encoding of the cid byte array. Mandatory.
-  "Selector":"", // Base 64 string encoding of the selector byte array. Optional and can test without this for now.
-  "SkipOffset":0 // Skip offset for the CAR to download. Optional. 
-}
-  ```
-
-  **Response**
-  ```
-  Body: CAR file bytes are streamed
-
-  Status Codes:
-  404 -> L2 does not have the requested content.
-  200 -> L2 has the requested content and CAR file bytes will be streamed back in the response body.
-  500 -> Internal L2 error that we should probably look into.
-  ```
-
-
 **Sample cids to test with** can be found [here](https://pl-strflt.notion.site/Sample-cids-for-testing-Saturn-IPFS-Gateway-can-serve-all-these-cids-4387a7b734aa4a5fa3166d8eac7cac5e). These are cids the IPFS Gateway can serve.
 
 ## Developer's Guide
