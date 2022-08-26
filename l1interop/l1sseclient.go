@@ -90,8 +90,15 @@ func (l *l1SseClient) Start() error {
 	}
 
 	l1url := fmt.Sprintf(l1RegisterURL, l.l1Addr, l.l2Id)
+	var resp *http.Response
 
 	for {
+		// discard any existing bytes over the previous response stream and close the stream to reclaim the connection if it still exists
+		if resp != nil && resp.Body != nil {
+			lr := io.LimitReader(resp.Body, maxPostResponseSize)
+			io.Copy(ioutil.Discard, lr)
+			resp.Body.Close()
+		}
 		// if context has already been cancelled, return immediately
 		if l.ctx.Err() != nil {
 			return l.ctx.Err()
@@ -127,7 +134,7 @@ func (l *l1SseClient) Start() error {
 		}
 
 		// make an http connection with keep alive
-		resp, err := l.client.Do(req)
+		resp, err = l.client.Do(req)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return l.ctx.Err()
@@ -214,10 +221,6 @@ func (l *l1SseClient) Start() error {
 func (l *l1SseClient) Stop() {
 	l.cancelF()
 	l.wg.Wait()
-}
-
-func (l *l1SseClient) Do() {
-
 }
 
 func (l *l1SseClient) sendCarResponse(ctx context.Context, l1Addr string, dr *types.DagTraversalRequest) error {
