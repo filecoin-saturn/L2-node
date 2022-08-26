@@ -46,7 +46,7 @@ At present, the L2 implementation has the following features:
 
 - On every startup, the L2 node connects to the configured L1 Discovery API (See the `L1_DISCOVERY_API_URL` environment variable below) to get back a list of L1 nodes to connect to.
 
-- The L2 node then picks a maximum of `MAX_L1s`(configurable environment variable) L1s from those recieved from the Discovery API and joins
+- The L2 node then picks a maximum of `MAX_L1s`(configurable) L1s from those recieved from the Discovery API and joins
   the "swarm" for all those L1s.
 
    - The L2 node joins an L1's Swarm by invoking the GET `https://{L1_IP}/register/{L2Id}` registration API on the L1. The L1 should send back a 200     status code and then keep the connection alive. 
@@ -60,7 +60,7 @@ At present, the L2 implementation has the following features:
      } 
      ```
    - For each request, the L2 node serves the CAR file by invoking the POST `https://{L1_IP}/data/{Root}/{RequestId}` API on the L1.
-     The L2 will serve the CAR file only if has it. The L2 makes no guaruantees of sending back a POST response for each request recieved from an L1.
+     The L2 will serve the CAR file only if it already has it. The L2 makes no guaruantees of sending back a POST response for each request recieved from an L1.
      If an L2 does not have a CAR file or if there's an error while serving the CAR file, the L2 will simply not send a POST or send some
      invalid bytes(incomplete CAR file) in the POST. The L1 should always ensure that a CAR file stream sent over POST ends with an `EOF` to ensure it has      read a complete valid CAR file.     
    - The number of concurrent requests that an L2 will serve for an L1 is configured using the `MAX_CONCURRENT_L1_REQUESTS` environment variable described      below.
