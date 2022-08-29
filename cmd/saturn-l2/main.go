@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -62,7 +61,7 @@ const (
 
 	// L1_DISCOVERY_URL_VAR configures the environment variable that determines the URL of the L1 Discovery API to invoke to
 	// get back the L1 nodes this L2 node will connect and serve CAR files to.
-	L1_DISCOVERY_URL_VAR = "L1_DISCOVERY_API_URL"
+	// L1_DISCOVERY_URL_VAR = "L1_DISCOVERY_API_URL"
 
 	// MAX_L1s_VAR configures the environment variable that determines the maximum
 	// number of L1s this L2 will connect to and join the swarm for. Defaults to 100.
@@ -71,6 +70,10 @@ const (
 	// MAX_CONCURRENT_L1_REQUESTS_VAR configures the environment variable that determines the maximum
 	// number of CAR file requests that will be processed concurrently for a single L1. defaults to 3.
 	MAX_CONCURRENT_L1_REQUESTS_VAR = "MAX_CONCURRENT_L1_REQUESTS"
+
+	// TEST_L1_IPs_VAR is a comma separated list of L1 IP Addresses that this L2 will connect to and serve
+	// CAR files to.
+	TEST_L1_IPs_VAR = "TEST_L1_IPs"
 )
 
 var (
@@ -113,6 +116,7 @@ type config struct {
 	L1DiscoveryAPIUrl       string
 	MaxL1Connections        int
 	MaxConcurrentL1Requests int
+	TestL1Ips               string
 }
 
 func main() {
@@ -162,7 +166,12 @@ func main() {
 
 	// get the Nearest L1s by talking to the orchestrator
 	log.Info("waiting to discover L1s...")
-	l1IPAddrs, err := getNearestL1s(ctx, cfg)
+	/*l1IPAddrs, err := getNearestL1s(ctx, cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to get nearest L1s to connect to: %s\n", err.Error())
+		os.Exit(2)
+	}*/
+	l1IPAddrs, err := parseCSV(cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to get nearest L1s to connect to: %s\n", err.Error())
 		os.Exit(2)
@@ -318,13 +327,13 @@ func mkConfig() (config, error) {
 	fmt.Printf("Using root dir %s\n", rootDirStr)
 
 	// parse L1 Discovery API URL
-	durl, exists := os.LookupEnv(L1_DISCOVERY_URL_VAR)
+	/*durl, exists := os.LookupEnv(L1_DISCOVERY_URL_VAR)
 	if !exists {
 		return config{}, errors.New("please configure the L1_DISCOVERY_API_URL environment variable")
 	}
 	if _, err := url.Parse(durl); err != nil {
 		return config{}, fmt.Errorf("l1 discovery api url is invalid, failed to parse, err=%w", err)
-	}
+	}*/
 
 	// parse max number of l1s to connect to
 	maxL1Conns, err := readIntEnvVar(MAX_L1s_VAR, defaultMaxL1s)
@@ -338,15 +347,40 @@ func mkConfig() (config, error) {
 		return config{}, fmt.Errorf("failed to parse MAX_CONCURRENT_L1_REQUESTS_VAR env var: %w", err)
 	}
 
+	l1IpStr := os.Getenv(TEST_L1_IPs_VAR)
+	if len(l1IpStr) == 0 {
+		return config{}, fmt.Errorf("Need a valid TEST_L1_IPs environment variable")
+	}
+
 	return config{
-		Port:                    port,
-		FilAddr:                 filAddr,
-		MaxDiskSpace:            maxDiskSpace,
-		RootDir:                 rootDirStr,
-		L1DiscoveryAPIUrl:       durl,
+		Port:         port,
+		FilAddr:      filAddr,
+		MaxDiskSpace: maxDiskSpace,
+		RootDir:      rootDirStr,
+		//L1DiscoveryAPIUrl:       durl,
 		MaxL1Connections:        int(maxL1Conns),
 		MaxConcurrentL1Requests: int(maxConcurrentL1Reqs),
+		TestL1Ips:               l1IpStr,
 	}, nil
+}
+
+func parseCSV(cfg config) (L1IPAddrs, error) {
+	l1IPAddrs := strings.Split(cfg.TestL1Ips, ",")
+	if len(l1IPAddrs) == 0 || (len(l1IPAddrs) == 1 && len(l1IPAddrs[0]) == 0) {
+		return nil, errors.New("need at least one valid L1 IP address")
+	}
+
+	for _, s := range l1IPAddrs {
+		if ip := net.ParseIP(s); ip == nil {
+			return nil, fmt.Errorf("l1 IP returned by L1 Discovery API is invalid, ip=%s", ip)
+		}
+	}
+
+	if cfg.MaxL1Connections < len(l1IPAddrs) {
+		l1IPAddrs = l1IPAddrs[:cfg.MaxL1Connections]
+	}
+
+	return l1IPAddrs, nil
 }
 
 func getNearestL1s(ctx context.Context, cfg config) (L1IPAddrs, error) {
