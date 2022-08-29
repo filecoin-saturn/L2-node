@@ -2,7 +2,7 @@
 #
 # The path follows a pattern
 # ./dist/BUILD-ID_TARGET/BINARY-NAME
-source = ["./dist/saturn-L2-node-macos_darwin_amd64/saturn-L2-node"]
+source = ["./dist/saturn-L2-node-macos/saturn-L2-node"]
 bundle_id = "filecoin.saturn.l2-node"
 
 apple_id {
