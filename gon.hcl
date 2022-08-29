@@ -11,5 +11,5 @@ apple_id {
 }
 
 sign {
-  application_identity = "Developer ID Application: @env:AC_FULLNAME"
+  application_identity = "Developer ID Application: Protocol Labs, Inc."
 }
