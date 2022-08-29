@@ -22,8 +22,6 @@ builds:
     id: saturn-L2-node-macos
     goos:
     - darwin
-    goarch:
-    - amd64
     main: ./cmd/saturn-l2
     env:
       - CGO_ENABLED=0
