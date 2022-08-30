@@ -169,8 +169,9 @@ func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
 
 		// we've registered successfully -> reset the backoff counter
 		backoff.Reset()
-		nConnectedl1s.Inc()
-		log.Infow("new L1 connection established", "l1", l.l1Addr, "nL1sConnected", nConnectedl1s.Load())
+		n := nConnectedl1s.Inc()
+		log.Infow("new L1 connection established", "l1", l.l1Addr, "nL1sConnected", n)
+		reportConnectionStatus(n)
 
 		// we've successfully connected to the L1, start reading new line delimited json requests for CAR files
 		scanner := bufio.NewScanner(resp.Body)
@@ -224,8 +225,18 @@ func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
 			log.Errorw("error while reading l1 requests; will reconnect and retry", "err", err)
 		}
 
-		nConnectedl1s.Dec()
-		log.Infow("lost connection to L1", "l1", l.l1Addr, "nL1sConnected", nConnectedl1s.Load())
+		n = nConnectedl1s.Dec()
+		log.Infow("lost connection to L1", "l1", l.l1Addr, "nL1sConnected", n)
+		reportConnectionStatus(n)
+	}
+}
+
+func reportConnectionStatus(nConnectedl1s uint64) {
+	// Report the connection status to Filecoin Station
+	if nConnectedl1s > 0 {
+		fmt.Printf("INFO: Saturn Node is online and connected to %v peer(s)\n", nConnectedl1s)
+	} else {
+		fmt.Print("ERROR: Saturn Node lost connection to the network\n")
 	}
 }
 
