@@ -110,8 +110,8 @@ var (
 	// in-activity timeout before we close an idle connection to an L1
 	idleL1ConnTimeout = 30 * time.Minute
 
-	// DNS Hostname of Saturn L1 Nodes
-	saturn_l1_hostName = "strn.pl"
+	// DNS Hostname of Saturn L1 Nodes for the L1 Test network.
+	saturn_l1_hostName = "saturn-test.network"
 
 	defaultL1DiscoveryURL = "https://orchestrator.saturn-test.network/nodes/nearby"
 )
@@ -233,7 +233,7 @@ func main() {
 			defer l1wg.Done()
 			if err := l1client.Start(nConnectedL1s); err != nil {
 				if !errors.Is(err, context.Canceled) {
-					log.Errorw("failed to connect to L1", "l1", l1ip, "err", err)
+					log.Errorw("terminated connection attempts with l1", "l1", l1ip, "err", err)
 				}
 			}
 		}(l1ip)

@@ -175,6 +175,11 @@ func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
 		// we've successfully connected to the L1, start reading new line delimited json requests for CAR files
 		scanner := bufio.NewScanner(resp.Body)
 		for scanner.Scan() {
+			reqJSON := scanner.Text()
+			if len(reqJSON) == 0 {
+				continue
+			}
+
 			log.Infow("will try to acquire semaphore for l1 request", "l1", l.l1Addr)
 			select {
 			case l.semaphore <- struct{}{}:
@@ -183,10 +188,11 @@ func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
 				return l.ctx.Err()
 			}
 
+			log.Infow("recieved request from L1", "l1", l.l1Addr, "json", reqJSON)
+
 			var carReq types.CARTransferRequest
-			reqJSON := scanner.Text()
 			if err := json.Unmarshal([]byte(reqJSON), &carReq); err != nil {
-				return fmt.Errorf("could not unmarshal l1 request: err=%w", err)
+				return fmt.Errorf("could not unmarshal l1 request: req=%s, err=%w", reqJSON, err)
 			}
 
 			dr, err := carReq.ToDAGRequest()
