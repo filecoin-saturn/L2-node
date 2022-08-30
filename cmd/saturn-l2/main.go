@@ -20,6 +20,8 @@ import (
 	"syscall"
 	"time"
 
+	"go.uber.org/atomic"
+
 	"github.com/filecoin-project/saturn-l2/l1interop"
 
 	"github.com/google/uuid"
@@ -216,6 +218,7 @@ func main() {
 	})
 
 	// Connect and register with all L1s and start serving their requests
+	nConnectedL1s := atomic.NewUint64(0)
 	var l1wg sync.WaitGroup
 	for _, l1ip := range l1IPAddrs {
 		l1ip := l1ip
@@ -228,7 +231,7 @@ func main() {
 		l1wg.Add(1)
 		go func(l1ip string) {
 			defer l1wg.Done()
-			if err := l1client.Start(); err != nil {
+			if err := l1client.Start(nConnectedL1s); err != nil {
 				if !errors.Is(err, context.Canceled) {
 					log.Errorw("failed to connect to L1", "l1", l1ip, "err", err)
 				}

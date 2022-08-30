@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/atomic"
+
 	"github.com/filecoin-project/saturn-l2/logs"
 
 	"github.com/filecoin-project/saturn-l2/types"
@@ -81,7 +83,7 @@ func New(l2Id string, client *http.Client, logger *logs.SaturnLogger, cs carServ
 	}
 }
 
-func (l *l1SseClient) Start() error {
+func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
 	backoff := &backoff.Backoff{
 		Min:    l.minBackOffWait,
 		Max:    l.maxBackoffWait,
@@ -167,8 +169,8 @@ func (l *l1SseClient) Start() error {
 
 		// we've registered successfully -> reset the backoff counter
 		backoff.Reset()
-
-		log.Infow("successfully registered and connected with l1", "l1", l.l1Addr)
+		nConnectedl1s.Inc()
+		log.Infow("new L1 connection established", "l1", l.l1Addr, "nL1sConnected", nConnectedl1s.Load())
 
 		// we've successfully connected to the L1, start reading new line delimited json requests for CAR files
 		scanner := bufio.NewScanner(resp.Body)
@@ -215,6 +217,9 @@ func (l *l1SseClient) Start() error {
 		if err := scanner.Err(); err != nil {
 			log.Errorw("error while reading l1 requests; will reconnect and retry", "err", err)
 		}
+
+		nConnectedl1s.Dec()
+		log.Infow("lost connection to L1", "l1", l.l1Addr, "nL1sConnected", nConnectedl1s.Load())
 	}
 }
 

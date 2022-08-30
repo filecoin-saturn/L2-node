@@ -31,6 +31,7 @@ require (
 	github.com/syndtr/goleveldb v1.0.0
 	github.com/warpfork/go-testmark v0.9.0 // indirect
 	github.com/whyrusleeping/cbor-gen v0.0.0-20220302191723-37c43cae8e14 // indirect
+	go.uber.org/atomic v1.9.0
 	golang.org/x/exp v0.0.0-20210715201039-d37aa40e8013 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 )
