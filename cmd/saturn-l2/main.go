@@ -111,7 +111,7 @@ var (
 	// DNS Hostname of Saturn L1 Nodes
 	saturn_l1_hostName = "strn.pl"
 
-	defaultL1DiscoveryURL = "https://orchestrator.strn.pl/nodes/nearby"
+	defaultL1DiscoveryURL = "https://orchestrator.saturn-test.network/nodes/nearby"
 )
 
 type config struct {
