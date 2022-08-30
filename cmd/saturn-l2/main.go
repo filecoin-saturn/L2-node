@@ -62,6 +62,7 @@ const (
 
 	// L1_DISCOVERY_URL_VAR configures the environment variable that determines the URL of the L1 Discovery API to invoke to
 	// get back the L1 nodes this L2 node will connect and serve CAR files to.
+	// Defaults to `defaultOrchestratorURL`.
 	L1_DISCOVERY_URL_VAR = "L1_DISCOVERY_API_URL"
 
 	// MAX_L1s_VAR configures the environment variable that determines the maximum
@@ -109,6 +110,8 @@ var (
 
 	// DNS Hostname of Saturn L1 Nodes
 	saturn_l1_hostName = "strn.pl"
+
+	defaultOrchestratorURL = "https://orchestrator.strn.pl/nodes/nearby"
 )
 
 type config struct {
@@ -346,7 +349,7 @@ func mkConfig() (config, error) {
 		// parse L1 Discovery API URL
 		durl, exists = os.LookupEnv(L1_DISCOVERY_URL_VAR)
 		if !exists {
-			return config{}, errors.New("please configure either TEST_L1_IPS OR the L1_DISCOVERY_API_URL environment variable")
+			durl = defaultOrchestratorURL
 		}
 		if _, err := url.Parse(durl); err != nil {
 			return config{}, fmt.Errorf("l1 discovery api url is invalid, failed to parse, err=%w", err)
