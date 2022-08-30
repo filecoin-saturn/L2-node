@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/atomic"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/ipfs/go-cid"
@@ -42,6 +44,8 @@ func TestSingleL1Simple(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return h.hasRecievedCAR(req.String(), h.cid1.String(), 0)
 	}, 5*time.Second, 200*time.Millisecond)
+
+	require.EqualValues(t, 1, h.nL1sConnected.Load())
 
 }
 
@@ -92,6 +96,8 @@ func TestL1ConcurrentRequests(t *testing.T) {
 		}
 		return true
 	}, 5*time.Second, 200*time.Millisecond)
+
+	require.EqualValues(t, 1, h.nL1sConnected.Load())
 }
 
 func TestMultipleL1ConcurrentRequests(t *testing.T) {
@@ -144,6 +150,7 @@ func TestMultipleL1ConcurrentRequests(t *testing.T) {
 		return true
 	}, 10*time.Second, 200*time.Millisecond)
 
+	require.EqualValues(t, 2, h.nL1sConnected.Load())
 }
 
 type l1State struct {
@@ -169,6 +176,8 @@ type l1Harness struct {
 	mu        sync.Mutex
 	l1Clients map[int]*l1SseClient
 	l1s       map[int]*l1State
+
+	nL1sConnected *atomic.Uint64
 }
 
 func (h *l1Harness) Start() {
@@ -179,7 +188,7 @@ func (h *l1Harness) Start() {
 
 	for _, l1Client := range h.l1Clients {
 		l1Client := l1Client
-		go l1Client.Start()
+		go l1Client.Start(h.nL1sConnected)
 	}
 }
 
@@ -258,6 +267,7 @@ func buildHarness(t *testing.T, l2Id string, nL1s int) *l1Harness {
 		expectedContent: make(map[string][]byte),
 		l1s:             make(map[int]*l1State),
 		l1Clients:       make(map[int]*l1SseClient),
+		nL1sConnected:   atomic.NewUint64(0),
 	}
 	h.expectedContent[rootcid1.String()] = bz1
 	h.expectedContent[rootcid2.String()] = bz2
