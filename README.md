@@ -140,6 +140,13 @@ WebUI: http://localhost:52860/webui
 ...
 ```
 
+When an L2 connects/disconnects with an L1 it will log the following at the INFO log level
+
+```
+new L1 connection established {"l1": "127.0.0.1:59003", "nL1sConnected": 2}
+lost connection to L1 {"l1": "127.0.0.1:59003", "nL1sConnected": 1}
+```
+
 If you want to connect to `WebUI`, also run `./scripts/download-webui.sh`.
 
 Note that the the Saturn L2 node only binds to the **localhost** loopback network interface and so will only be reachable from the same machine.
