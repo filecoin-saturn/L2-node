@@ -15,7 +15,7 @@ import (
 // for the given root and selector.
 type CARTransferRequest struct {
 	RequestId  string
-	Root       string
+	Root       string `json:"cid"`
 	SkipOffset uint64
 }
 

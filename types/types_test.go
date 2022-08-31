@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/ipfs/go-cid"
@@ -44,6 +45,13 @@ func TestCarTransferRequest(t *testing.T) {
 
 	for name, tc := range tcs {
 		t.Run(name, func(t *testing.T) {
+			bz, err := json.Marshal(tc.cr)
+			require.NoError(t, err)
+
+			var cr CARTransferRequest
+			require.NoError(t, json.Unmarshal(bz, &cr))
+			require.EqualValues(t, cr.Root, tc.cr)
+
 			dr, err := tc.cr.ToDAGRequest()
 			if tc.isError {
 				require.Error(t, err)
