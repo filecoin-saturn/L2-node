@@ -28,7 +28,7 @@ var (
 	minBackOff           = 5 * time.Second
 	maxBackOff           = 10 * time.Minute
 	factor               = 1.5
-	maxReconnectAttempts = 15
+	maxReconnectAttempts = 2
 	maxPostResponseSize  = int64(102400) // 100 Kib
 
 	log = logging.Logger("l1-interop")
@@ -36,7 +36,7 @@ var (
 
 var (
 	l1RegisterURL = "https://%s/register/%s"
-	l1PostURL     = "https://%s/data/%s/%s"
+	l1PostURL     = "https://%s/data/%s?requestId=%s"
 )
 
 type l1SseClient struct {
@@ -51,7 +51,7 @@ type l1SseClient struct {
 	minBackOffWait       time.Duration
 	maxBackoffWait       time.Duration
 	backOffFactor        float64
-	maxReconnectAttempts float64
+	MaxReconnectAttempts float64
 
 	cs     carServer
 	logger *logs.SaturnLogger
@@ -75,7 +75,7 @@ func New(l2Id string, client *http.Client, logger *logs.SaturnLogger, cs carServ
 		minBackOffWait:       minBackOff,
 		maxBackoffWait:       maxBackOff,
 		backOffFactor:        factor,
-		maxReconnectAttempts: float64(maxReconnectAttempts),
+		MaxReconnectAttempts: float64(maxReconnectAttempts),
 		logger:               logger,
 		cs:                   cs,
 		l1Addr:               l1Addr,
@@ -83,7 +83,7 @@ func New(l2Id string, client *http.Client, logger *logs.SaturnLogger, cs carServ
 	}
 }
 
-func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
+func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64, connCh chan struct{}, disConnCh chan struct{}) error {
 	backoff := &backoff.Backoff{
 		Min:    l.minBackOffWait,
 		Max:    l.maxBackoffWait,
@@ -115,7 +115,7 @@ func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
 
 		doBackOffFn := func() error {
 			// if we've exhausted the maximum number of connection attempts with the L1, return.
-			if backoff.Attempt() > l.maxReconnectAttempts {
+			if backoff.Attempt() > l.MaxReconnectAttempts {
 				log.Errorw("failed to connect to l1; exhausted max attempts", "l1", l.l1Addr, "err", err)
 				return fmt.Errorf("failed to connect to l1 after exhausting max attempts, l1: %s, err: %w", l.l1Addr, err)
 			}
@@ -169,8 +169,12 @@ func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
 
 		// we've registered successfully -> reset the backoff counter
 		backoff.Reset()
-		nConnectedl1s.Inc()
-		log.Infow("new L1 connection established", "l1", l.l1Addr, "nL1sConnected", nConnectedl1s.Load())
+		log.Infow("new L1 connection established", "l1", l.l1Addr, "nL1sConnected", nConnectedl1s.Inc())
+
+		select {
+		case connCh <- struct{}{}:
+		default:
+		}
 
 		// we've successfully connected to the L1, start reading new line delimited json requests for CAR files
 		scanner := bufio.NewScanner(resp.Body)
@@ -224,18 +228,17 @@ func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
 			log.Errorw("error while reading l1 requests; will reconnect and retry", "err", err)
 		}
 
-		nConnectedl1s.Dec()
-		log.Infow("lost connection to L1", "l1", l.l1Addr, "nL1sConnected", nConnectedl1s.Load())
+		select {
+		case disConnCh <- struct{}{}:
+		default:
+		}
+		log.Infow("lost connection to L1", "l1", l.l1Addr, "nL1sConnected", nConnectedl1s.Dec())
 	}
 }
 
 func (l *l1SseClient) Stop() {
 	l.cancelF()
 	l.wg.Wait()
-}
-
-func (l *l1SseClient) Do() {
-
 }
 
 func (l *l1SseClient) sendCarResponse(ctx context.Context, l1Addr string, dr *types.DagTraversalRequest) error {

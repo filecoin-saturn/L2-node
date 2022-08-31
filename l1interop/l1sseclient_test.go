@@ -188,7 +188,7 @@ func (h *l1Harness) Start() {
 
 	for _, l1Client := range h.l1Clients {
 		l1Client := l1Client
-		go l1Client.Start(h.nL1sConnected)
+		go l1Client.Start(h.nL1sConnected, make(chan struct{}), make(chan struct{}))
 	}
 }
 
@@ -281,10 +281,13 @@ func buildHarness(t *testing.T, l2Id string, nL1s int) *l1Harness {
 		}
 
 		mu := mux.NewRouter()
-		mu.HandleFunc("/data/{root}/{requestId}", func(w http.ResponseWriter, r *http.Request) {
+		mu.HandleFunc("/data/{root}", func(w http.ResponseWriter, r *http.Request) {
 			vars := mux.Vars(r)
 			rootCid := vars["root"]
-			requestId := vars["requestId"]
+
+			vs := r.URL.Query()
+			requestId := vs.Get("requestId")
+
 			bz, err := ioutil.ReadAll(r.Body)
 			if err != nil {
 				return

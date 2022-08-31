@@ -114,6 +114,8 @@ var (
 	saturn_l1_hostName = "saturn-test.network"
 
 	defaultL1DiscoveryURL = "https://orchestrator.saturn-test.network/nodes/nearby"
+
+	waitL1Connectivity = 5 * time.Second
 )
 
 type config struct {
@@ -219,6 +221,8 @@ func main() {
 
 	// Connect and register with all L1s and start serving their requests
 	nConnectedL1s := atomic.NewUint64(0)
+	disConnCh := make(chan struct{})
+	connCh := make(chan struct{})
 	var l1wg sync.WaitGroup
 	for _, l1ip := range l1IPAddrs {
 		l1ip := l1ip
@@ -231,9 +235,10 @@ func main() {
 		l1wg.Add(1)
 		go func(l1ip string) {
 			defer l1wg.Done()
-			if err := l1client.Start(nConnectedL1s); err != nil {
+			if err := l1client.Start(nConnectedL1s, connCh, disConnCh); err != nil {
 				if !errors.Is(err, context.Canceled) {
 					log.Errorw("terminated connection attempts with l1", "l1", l1ip, "err", err)
+					fmt.Printf("ERROR: Saturn Node was not able to connect to the L1 with IP %s after %f attempts, giving up.\n", l1ip, l1client.MaxReconnectAttempts)
 				}
 			}
 		}(l1ip)
@@ -243,6 +248,9 @@ func main() {
 		l1wg.Wait()
 		log.Info("finished tearing down all l1 connections")
 	})
+
+	// start a go-routine to log L1 connectivity
+	go logL1Connectivity(ctx, nConnectedL1s, connCh, disConnCh)
 
 	m := mux.NewRouter()
 	m.PathPrefix("/config").Handler(http.HandlerFunc(configHandler(cfgJson)))
@@ -285,6 +293,51 @@ func main() {
 
 	if err := srv.Serve(nl); err != http.ErrServerClosed {
 		fmt.Fprintf(os.Stderr, "error shutting down the server: %s", err.Error())
+	}
+}
+
+func logL1Connectivity(ctx context.Context, nConnectedL1s *atomic.Uint64, connCh chan struct{}, disConnCh chan struct{}) {
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+
+	disConnected := false
+
+	for {
+		select {
+		case <-timer.C:
+			// are we connected to any of the L1s ?
+			if nConnectedL1s.Load() == 0 {
+				fmt.Print("ERROR: Saturn Node is not able to connect to the network\n")
+				disConnected = true
+			}
+
+		case <-connCh:
+			if disConnected {
+				fmt.Println("\n Saturn Node is connected to the L1 network")
+				disConnected = false
+			}
+
+		case <-disConnCh:
+			if nConnectedL1s.Load() != 0 {
+				continue
+			}
+
+			// we have no connections with L1s, if this persists after a wait, log it to the console.
+			select {
+			case <-time.After(waitL1Connectivity):
+				if nConnectedL1s.Load() == 0 {
+					fmt.Print("ERROR: Saturn Node is not able to connect to the network\n")
+					disConnected = true
+				}
+			case <-ctx.Done():
+				return
+			}
+
+			timer.Stop()
+
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
@@ -333,7 +386,10 @@ func mkConfig() (config, error) {
 		return config{}, err
 	}
 	if _, err := os.Stat(rootDirStr); err != nil {
-		return config{}, fmt.Errorf("root dir %s does NOT exist", rootDirStr)
+		if err := os.MkdirAll(rootDirStr, 0777); err != nil {
+			return config{}, fmt.Errorf("failed to create default root dir %s, err=%w", rootDirStr, err)
+		}
+		log.Infow("create default l2 root directory", "dir", rootDirStr)
 	}
 	fmt.Printf("Using root dir %s\n", rootDirStr)
 
