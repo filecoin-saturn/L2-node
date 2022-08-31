@@ -115,7 +115,7 @@ var (
 
 	defaultL1DiscoveryURL = "https://orchestrator.saturn-test.network/nodes/nearby"
 
-	waitL1Connectivity = 5 * time.Second
+	waitL1Connectivity = 10 * time.Second
 )
 
 type config struct {
@@ -221,8 +221,6 @@ func main() {
 
 	// Connect and register with all L1s and start serving their requests
 	nConnectedL1s := atomic.NewUint64(0)
-	disConnCh := make(chan struct{})
-	connCh := make(chan struct{})
 	var l1wg sync.WaitGroup
 	for _, l1ip := range l1IPAddrs {
 		l1ip := l1ip
@@ -235,7 +233,7 @@ func main() {
 		l1wg.Add(1)
 		go func(l1ip string) {
 			defer l1wg.Done()
-			if err := l1client.Start(nConnectedL1s, connCh, disConnCh); err != nil {
+			if err := l1client.Start(nConnectedL1s); err != nil {
 				if !errors.Is(err, context.Canceled) {
 					log.Errorw("terminated connection attempts with l1", "l1", l1ip, "err", err)
 					fmt.Printf("ERROR: Saturn Node was not able to connect to the L1 with IP %s after %f attempts, giving up.\n", l1ip, l1client.MaxReconnectAttempts)
@@ -250,7 +248,7 @@ func main() {
 	})
 
 	// start a go-routine to log L1 connectivity
-	go logL1Connectivity(ctx, nConnectedL1s, connCh, disConnCh)
+	go logL1Connectivity(ctx, nConnectedL1s)
 
 	m := mux.NewRouter()
 	m.PathPrefix("/config").Handler(http.HandlerFunc(configHandler(cfgJson)))
@@ -296,49 +294,34 @@ func main() {
 	}
 }
 
-func logL1Connectivity(ctx context.Context, nConnectedL1s *atomic.Uint64, connCh chan struct{}, disConnCh chan struct{}) {
-	timer := time.NewTimer(5 * time.Second)
-	defer timer.Stop()
+func logL1Connectivity(ctx context.Context, nConnectedL1s *atomic.Uint64) {
+	ticker := time.NewTicker(waitL1Connectivity)
+	defer ticker.Stop()
 
-	disConnected := false
+	isConnected := false
+	isFirstEvent := true
 
 	for {
 		select {
-		case <-timer.C:
-			// are we connected to any of the L1s ?
+		case <-ticker.C:
 			if nConnectedL1s.Load() == 0 {
-				fmt.Print("ERROR: Saturn Node is not able to connect to the network\n")
-				disConnected = true
-			}
-
-		case <-connCh:
-			if disConnected {
-				fmt.Println("\n Saturn Node is connected to the L1 network")
-				disConnected = false
-			}
-
-		case <-disConnCh:
-			if nConnectedL1s.Load() != 0 {
-				continue
-			}
-
-			// we have no connections with L1s, if this persists after a wait, log it to the console.
-			select {
-			case <-time.After(waitL1Connectivity):
-				if nConnectedL1s.Load() == 0 {
+				if isConnected || isFirstEvent {
 					fmt.Print("ERROR: Saturn Node is not able to connect to the network\n")
-					disConnected = true
+					isConnected = false
+					isFirstEvent = false
 				}
-			case <-ctx.Done():
-				return
+			} else {
+				if !isConnected || isFirstEvent {
+					fmt.Print("Saturn Node is connected to the network\n")
+					isConnected = true
+					isFirstEvent = false
+				}
 			}
-
-			timer.Stop()
-
 		case <-ctx.Done():
 			return
 		}
 	}
+
 }
 
 func updateCleanup(oldFunc func(), newFunc func()) func() {

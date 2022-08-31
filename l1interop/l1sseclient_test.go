@@ -188,7 +188,7 @@ func (h *l1Harness) Start() {
 
 	for _, l1Client := range h.l1Clients {
 		l1Client := l1Client
-		go l1Client.Start(h.nL1sConnected, make(chan struct{}), make(chan struct{}))
+		go l1Client.Start(h.nL1sConnected)
 	}
 }
 

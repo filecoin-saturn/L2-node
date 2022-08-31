@@ -83,7 +83,7 @@ func New(l2Id string, client *http.Client, logger *logs.SaturnLogger, cs carServ
 	}
 }
 
-func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64, connCh chan struct{}, disConnCh chan struct{}) error {
+func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
 	backoff := &backoff.Backoff{
 		Min:    l.minBackOffWait,
 		Max:    l.maxBackoffWait,
@@ -171,11 +171,6 @@ func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64, connCh chan struct{}, 
 		backoff.Reset()
 		log.Infow("new L1 connection established", "l1", l.l1Addr, "nL1sConnected", nConnectedl1s.Inc())
 
-		select {
-		case connCh <- struct{}{}:
-		default:
-		}
-
 		// we've successfully connected to the L1, start reading new line delimited json requests for CAR files
 		scanner := bufio.NewScanner(resp.Body)
 		for scanner.Scan() {
@@ -228,10 +223,6 @@ func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64, connCh chan struct{}, 
 			log.Errorw("error while reading l1 requests; will reconnect and retry", "err", err)
 		}
 
-		select {
-		case disConnCh <- struct{}{}:
-		default:
-		}
 		log.Infow("lost connection to L1", "l1", l.l1Addr, "nL1sConnected", nConnectedl1s.Dec())
 	}
 }
