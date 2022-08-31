@@ -240,6 +240,7 @@ func (l *l1SseClient) Do() {
 
 func (l *l1SseClient) sendCarResponse(ctx context.Context, l1Addr string, dr *types.DagTraversalRequest) error {
 	respUrl := fmt.Sprintf(l1PostURL, l1Addr, dr.Root.String(), dr.RequestId.String())
+	log.Infow("will send back CAR file using HTTP POST to L1", "l1", l1Addr, "url", respUrl)
 
 	prd, pw := io.Pipe()
 	defer prd.Close()
