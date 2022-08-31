@@ -28,7 +28,7 @@ var (
 	minBackOff           = 5 * time.Second
 	maxBackOff           = 10 * time.Minute
 	factor               = 1.5
-	maxReconnectAttempts = 2
+	maxReconnectAttempts = 15
 	maxPostResponseSize  = int64(102400) // 100 Kib
 
 	log = logging.Logger("l1-interop")
