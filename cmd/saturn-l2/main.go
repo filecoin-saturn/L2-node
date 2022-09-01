@@ -20,6 +20,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jpillora/backoff"
+
 	"go.uber.org/atomic"
 
 	"github.com/filecoin-project/saturn-l2/l1interop"
@@ -114,6 +116,12 @@ var (
 	saturn_l1_hostName = "saturn-test.network"
 
 	defaultL1DiscoveryURL = "https://orchestrator.saturn-test.network/nodes/nearby"
+
+	checkL1ConnectivityInterval = 5 * time.Second
+
+	maxL1DiscoveryAttempts = float64(10)
+	maxL1DiscoveryBackoff  = 60 * time.Second
+	minL1DiscoveryBackoff  = 2 * time.Second
 )
 
 type config struct {
@@ -180,7 +188,7 @@ func main() {
 	if cfg.UseTestL1IPAddrs {
 		l1IPAddrs = cfg.TestL1IPAddr
 	} else {
-		l1IPAddrs, err = getNearestL1s(ctx, cfg)
+		l1IPAddrs, err = getNearestL1sWithRetry(ctx, cfg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to get nearest L1s to connect to: %s\n", err.Error())
 			os.Exit(2)
@@ -219,6 +227,7 @@ func main() {
 
 	// Connect and register with all L1s and start serving their requests
 	nConnectedL1s := atomic.NewUint64(0)
+	failedL1Ch := make(chan struct{}, len(l1IPAddrs))
 	var l1wg sync.WaitGroup
 	for _, l1ip := range l1IPAddrs {
 		l1ip := l1ip
@@ -231,6 +240,10 @@ func main() {
 		l1wg.Add(1)
 		go func(l1ip string) {
 			defer l1wg.Done()
+			defer func() {
+				failedL1Ch <- struct{}{}
+			}()
+
 			if err := l1client.Start(nConnectedL1s); err != nil {
 				if !errors.Is(err, context.Canceled) {
 					log.Errorw("terminated connection attempts with l1", "l1", l1ip, "err", err)
@@ -243,6 +256,23 @@ func main() {
 		l1wg.Wait()
 		log.Info("finished tearing down all l1 connections")
 	})
+
+	// if we fail to connect to any of the L1s after exhausting all retries; error out and exit.
+	go func() {
+		for i := 0; i < len(l1IPAddrs); i++ {
+			select {
+			case <-failedL1Ch:
+			case <-ctx.Done():
+				return
+			}
+		}
+		log.Error("failed to connect to any of the L1s after exhausting all attempts; shutting down")
+		fmt.Println("ERROR: Saturn node failed to connect to the network and has exhausted all retry attempts")
+		os.Exit(2)
+	}()
+
+	// start go-routine to log L1 connectivity
+	go logL1Connectivity(ctx, nConnectedL1s)
 
 	m := mux.NewRouter()
 	m.PathPrefix("/config").Handler(http.HandlerFunc(configHandler(cfgJson)))
@@ -286,6 +316,33 @@ func main() {
 
 	if err := srv.Serve(nl); err != http.ErrServerClosed {
 		fmt.Fprintf(os.Stderr, "error shutting down the server: %s", err.Error())
+	}
+}
+
+func logL1Connectivity(ctx context.Context, nConnectedL1s *atomic.Uint64) {
+	ticker := time.NewTicker(checkL1ConnectivityInterval)
+	defer ticker.Stop()
+
+	lastNConnected := uint64(0)
+
+	for {
+		select {
+		case <-ticker.C:
+			nConnected := nConnectedL1s.Load()
+
+			// if we are still not connected to any peers -> log it.
+			if nConnected == 0 {
+				fmt.Print("ERROR: Saturn Node is not able to connect to the network\n")
+			} else {
+				if nConnected != lastNConnected {
+					fmt.Printf("Saturn Node is online and connected to %d peers\n", nConnected)
+				}
+			}
+
+			lastNConnected = nConnected
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
@@ -401,6 +458,42 @@ func parseL1IPs(l1IPsStr string) (L1IPAddrs, error) {
 	}
 
 	return l1IPAddrs, nil
+}
+
+func getNearestL1sWithRetry(ctx context.Context, cfg config) (L1IPAddrs, error) {
+	backoff := &backoff.Backoff{
+		Min:    minL1DiscoveryBackoff,
+		Max:    maxL1DiscoveryBackoff,
+		Factor: 2,
+		Jitter: true,
+	}
+
+	for {
+		l1Addrs, err := getNearestL1s(ctx, cfg)
+		if err == nil {
+			return l1Addrs, nil
+		}
+
+		// if we've exhausted the maximum number of connection attempts with the L1, return.
+		if backoff.Attempt() > maxL1DiscoveryAttempts {
+			log.Errorw("exhausted all attempts to get L1s from orchestrator; not retrying", "err", err)
+			return nil, err
+		}
+
+		log.Errorw("failed to get L1s from orchestrator; will retry", "err", err)
+
+		// backoff and wait before making a new request to the orchestrator.
+		duration := backoff.Duration()
+		bt := time.NewTimer(duration)
+		defer bt.Stop()
+		select {
+		case <-bt.C:
+			log.Infow("back-off complete, retrying request to orchestrator",
+				"backoff time", duration.String())
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
 }
 
 func getNearestL1s(ctx context.Context, cfg config) (L1IPAddrs, error) {

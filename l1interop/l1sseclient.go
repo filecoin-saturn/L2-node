@@ -36,7 +36,7 @@ var (
 
 var (
 	l1RegisterURL = "https://%s/register/%s"
-	l1PostURL     = "https://%s/data/%s/%s"
+	l1PostURL     = "https://%s/data/%s?requestId=%s"
 )
 
 type l1SseClient struct {
@@ -171,7 +171,6 @@ func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
 		backoff.Reset()
 		n := nConnectedl1s.Inc()
 		log.Infow("new L1 connection established", "l1", l.l1Addr, "nL1sConnected", n)
-		reportConnectionStatus(n)
 
 		// we've successfully connected to the L1, start reading new line delimited json requests for CAR files
 		scanner := bufio.NewScanner(resp.Body)
@@ -227,26 +226,12 @@ func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
 
 		n = nConnectedl1s.Dec()
 		log.Infow("lost connection to L1", "l1", l.l1Addr, "nL1sConnected", n)
-		reportConnectionStatus(n)
-	}
-}
-
-func reportConnectionStatus(nConnectedl1s uint64) {
-	// Report the connection status to Filecoin Station
-	if nConnectedl1s > 0 {
-		fmt.Printf("INFO: Saturn Node is online and connected to %v peer(s)\n", nConnectedl1s)
-	} else {
-		fmt.Print("ERROR: Saturn Node lost connection to the network\n")
 	}
 }
 
 func (l *l1SseClient) Stop() {
 	l.cancelF()
 	l.wg.Wait()
-}
-
-func (l *l1SseClient) Do() {
-
 }
 
 func (l *l1SseClient) sendCarResponse(ctx context.Context, l1Addr string, dr *types.DagTraversalRequest) error {
