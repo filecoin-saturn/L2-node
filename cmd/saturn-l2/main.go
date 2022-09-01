@@ -257,6 +257,7 @@ func main() {
 		log.Info("finished tearing down all l1 connections")
 	})
 
+	// if we fail to connect to any of the L1s after exhausting all retries; error out and exit.
 	go func() {
 		for i := 0; i < len(l1IPAddrs); i++ {
 			select {
