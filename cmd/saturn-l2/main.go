@@ -334,7 +334,10 @@ func mkConfig() (config, error) {
 		return config{}, err
 	}
 	if _, err := os.Stat(rootDirStr); err != nil {
-		return config{}, fmt.Errorf("root dir %s does NOT exist", rootDirStr)
+		if err := os.MkdirAll(rootDirStr, 0777); err != nil {
+			return config{}, fmt.Errorf("failed to create default root dir %s, err=%w", rootDirStr, err)
+		}
+		log.Infow("create default l2 root directory", "dir", rootDirStr)
 	}
 	log.Infof("Using root dir %s\n", rootDirStr)
 
