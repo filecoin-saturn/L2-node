@@ -50,7 +50,7 @@ func TestCarTransferRequest(t *testing.T) {
 
 			var cr CARTransferRequest
 			require.NoError(t, json.Unmarshal(bz, &cr))
-			require.EqualValues(t, cr.Root, tc.cr)
+			require.EqualValues(t, cr.Root, tc.cr.Root)
 
 			dr, err := tc.cr.ToDAGRequest()
 			if tc.isError {
