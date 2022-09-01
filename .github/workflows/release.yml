@@ -85,3 +85,10 @@ jobs:
           AC_PASSWORD: ${{ secrets.AC_PASSWORD }}
           # Your GoReleaser Pro key, if you are using the 'goreleaser-pro' distribution
           # GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+      -
+        name: Attach produced packages to Github Action
+        uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: dist/*.tar.gz
+          if-no-files-found: error
