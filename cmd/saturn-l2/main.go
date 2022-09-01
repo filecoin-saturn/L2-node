@@ -267,7 +267,7 @@ func main() {
 			}
 		}
 		log.Error("failed to connect to any of the L1s after exhausting all attempts; shutting down")
-		fmt.Println("\n ERROR: Saturn node failed to connect to the network and has exhausted all retry attempts")
+		fmt.Println("ERROR: Saturn node failed to connect to the network and has exhausted all retry attempts")
 		os.Exit(2)
 	}()
 
