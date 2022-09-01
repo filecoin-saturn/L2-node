@@ -135,21 +135,23 @@ At present, the L2 implementation has the following features:
 ```
 ./saturn-l2
 ...
-Server listening on 127.0.0.1:52860
 WebUI: http://localhost:52860/webui
+API: http://localhost:52860/
 ...
 ```
 
-When an L2 connects/disconnects with an L1 it will log the following at the INFO log level
+When an L2 connects/disconnects with an L1 it prints this to standard output:
 
 ```
-new L1 connection established {"l1": "127.0.0.1:59003", "nL1sConnected": 2}
-lost connection to L1 {"l1": "127.0.0.1:59003", "nL1sConnected": 1}
+INFO: Saturn Node is online and connected to 1 peer(s)
+INFO: Saturn Node is online and connected to 2 peer(s)
+INFO: Saturn Node is online and connected to 1 peer(s)
+ERROR: Saturn Node lost connection to the network
 ```
 
 If you want to connect to `WebUI`, also run `./scripts/download-webui.sh`.
 
-Note that the the Saturn L2 node only binds to the **localhost** loopback network interface and so will only be reachable from the same machine.
+Note that the Saturn L2 node only binds to the **localhost** loopback network interface and so will only be reachable from the same machine.
 In the above snippet, `52860` is the port that the Saturn L2 node binds to on the localhost interface. This port can be configured using the `PORT` environment variable as mentioned above.
 
 ### HTTP APIs

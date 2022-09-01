@@ -280,8 +280,9 @@ func main() {
 	}
 
 	port := nl.Addr().(*net.TCPAddr).Port
-	fmt.Println("Server listening on", nl.Addr())
+	log.Infof("Server listening on %v", nl.Addr())
 	fmt.Printf("WebUI: http://localhost:%d/webui\n", port)
+	fmt.Printf("API: http://localhost:%d/\n", port)
 
 	if err := srv.Serve(nl); err != http.ErrServerClosed {
 		fmt.Fprintf(os.Stderr, "error shutting down the server: %s", err.Error())
@@ -335,7 +336,7 @@ func mkConfig() (config, error) {
 	if _, err := os.Stat(rootDirStr); err != nil {
 		return config{}, fmt.Errorf("root dir %s does NOT exist", rootDirStr)
 	}
-	fmt.Printf("Using root dir %s\n", rootDirStr)
+	log.Infof("Using root dir %s\n", rootDirStr)
 
 	var l1IPAddrs L1IPAddrs
 	var useL1IPAddrs bool
