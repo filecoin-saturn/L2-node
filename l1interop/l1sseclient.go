@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/filecoin-project/saturn-l2/carstore"
+
 	"go.uber.org/atomic"
 
 	"github.com/filecoin-project/saturn-l2/logs"
@@ -180,42 +182,50 @@ func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
 				continue
 			}
 
-			log.Infow("will try to acquire semaphore for l1 request", "l1", l.l1Addr)
+			log.Debugw("will try to acquire semaphore for l1 request", "l1", l.l1Addr)
 			select {
 			case l.semaphore <- struct{}{}:
-				log.Infow("successfully acquired semaphore for l1 request", "l1", l.l1Addr)
+				log.Debugw("successfully acquired semaphore for l1 request", "l1", l.l1Addr)
 			case <-l.ctx.Done():
 				return l.ctx.Err()
 			}
 
-			log.Infow("recieved request from L1", "l1", l.l1Addr, "json", reqJSON)
+			releaseSem := func() {
+				select {
+				case <-l.semaphore:
+					log.Debugw("successfully released semaphore for l1 request", "l1", l.l1Addr)
+				case <-l.ctx.Done():
+					return
+				}
+			}
+
+			log.Infow("received request from L1", "l1", l.l1Addr, "json", reqJSON)
 
 			var carReq types.CARTransferRequest
 			if err := json.Unmarshal([]byte(reqJSON), &carReq); err != nil {
+				releaseSem()
 				return fmt.Errorf("could not unmarshal l1 request: req=%s, err=%w", reqJSON, err)
 			}
 
 			dr, err := carReq.ToDAGRequest()
 			if err != nil {
+				releaseSem()
 				return fmt.Errorf("could not parse car transfer request,err=%w", err)
 			}
 
-			l.logger.Infow(dr.RequestId, "received CAR transfer request from L1", "l1", l.l1Addr, "req", dr)
+			l.logger.Infow(dr.RequestId, "parsed CAR transfer request received from L1", "l1", l.l1Addr, "req", dr)
 
 			l.wg.Add(1)
 			go func() {
 				defer l.wg.Done()
-				defer func() {
-					select {
-					case <-l.semaphore:
-						log.Infow("successfully relased semaphore for l1 request", "l1", l.l1Addr)
-					case <-l.ctx.Done():
-						return
-					}
-				}()
+				defer releaseSem()
 
 				if err := l.sendCarResponse(l.ctx, l.l1Addr, dr); err != nil {
-					l.logger.Errorw(dr.RequestId, "failed to send CAR file to L1 using Post", "err", err, "L1", l.l1Addr)
+					if !errors.Is(err, carstore.ErrNotFound) {
+						l.logger.Errorw(dr.RequestId, "failed to send CAR file to L1 using Post", "err", err, "l1", l.l1Addr)
+					} else {
+						l.logger.Infow(dr.RequestId, "not sending CAR over POST", "err", err, "l1", l.l1Addr)
+					}
 				}
 			}()
 		}
@@ -229,6 +239,10 @@ func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
 	}
 }
 
+func (l *l1SseClient) serve() {
+
+}
+
 func (l *l1SseClient) Stop() {
 	l.cancelF()
 	l.wg.Wait()
@@ -236,7 +250,6 @@ func (l *l1SseClient) Stop() {
 
 func (l *l1SseClient) sendCarResponse(ctx context.Context, l1Addr string, dr *types.DagTraversalRequest) error {
 	respUrl := fmt.Sprintf(l1PostURL, l1Addr, dr.Root.String(), dr.RequestId.String())
-	log.Infow("will send back CAR file using HTTP POST to L1", "l1", l1Addr, "url", respUrl)
 
 	prd, pw := io.Pipe()
 	defer prd.Close()
@@ -252,14 +265,14 @@ func (l *l1SseClient) sendCarResponse(ctx context.Context, l1Addr string, dr *ty
 	req, err := http.NewRequest(http.MethodPost, respUrl, prd)
 	if err != nil {
 		_ = prd.CloseWithError(err)
-		return fmt.Errorf("failed to create http post request to send back car to L1: %w", err)
+		return fmt.Errorf("failed to create http post request to send back car to L1; url=%s; err=%w", respUrl, err)
 	}
 	req = req.WithContext(ctx)
 
 	resp, err := l.client.Do(req)
 	if err != nil {
 		_ = prd.CloseWithError(err)
-		return fmt.Errorf("failed to send http post request with CAR to L1: %w", err)
+		return fmt.Errorf("failed to send http post request with CAR to L1;url=%s, err=%w", respUrl, err)
 	}
 	defer resp.Body.Close()
 	_ = prd.Close()
@@ -268,9 +281,9 @@ func (l *l1SseClient) sendCarResponse(ctx context.Context, l1Addr string, dr *ty
 	_, _ = io.Copy(ioutil.Discard, lr)
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("got status code %d from L1 for POST, expected %d", resp.StatusCode, http.StatusOK)
+		return fmt.Errorf("got status code %d from L1 for POST url %s , expected %d", resp.StatusCode, respUrl, http.StatusOK)
 	}
 
-	l.logger.Infow(dr.RequestId, "successfully sent CAR file to L1", "l1", l1Addr)
+	l.logger.Infow(dr.RequestId, "successfully sent CAR file to L1", "l1", l1Addr, "url", respUrl)
 	return nil
 }

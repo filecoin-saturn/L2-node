@@ -221,7 +221,7 @@ func TestDownloadTimeout(t *testing.T) {
 	// second try -> not found
 	csh.fetchAndAssertNotFound(reqID, rootcid)
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	// still errors out
 	csh.fetchAndAssertNotFound(reqID, rootcid)

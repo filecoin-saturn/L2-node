@@ -43,7 +43,7 @@ var (
 	maxConcurrentReadyFetches = 3
 	secondMissDuration        = 24 * time.Hour
 	maxRecoverAttempts        = uint64(1)
-	defaultDownloadTimeout    = 30 * time.Minute
+	defaultDownloadTimeout    = 20 * time.Minute
 )
 
 var (
@@ -279,7 +279,6 @@ func (cs *CarStore) FetchAndWriteCAR(reqID uuid.UUID, root cid.Cid, writer func(
 	// we don't have the requested CAR -> apply "cache on second miss" rule
 	cs.executeCacheMiss(reqID, root)
 
-	cs.logger.Infow(reqID, "returning not found for requested root")
 	return ErrNotFound
 }
 
@@ -318,7 +317,7 @@ func (cs *CarStore) executeCacheMiss(reqID uuid.UUID, root cid.Cid) {
 			cs.logger.Infow(reqID, "successfully downloaded and cached given root")
 			sa.Close()
 		} else {
-			cs.logger.LogError(reqID, "failed to register/acquire shard", err)
+			cs.logger.LogError(reqID, "download failed as failed to register/acquire shard", err)
 		}
 
 		cs.mu.Lock()
