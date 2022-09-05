@@ -12,3 +12,7 @@ apple_id {
 sign {
   application_identity = "Developer ID Application: Protocol Labs, Inc."
 }
+
+zip {
+  output_path="./dist/saturn-L2-node.zip"
+}
