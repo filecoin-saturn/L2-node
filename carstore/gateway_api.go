@@ -50,7 +50,7 @@ func (g *gatewayAPI) Fetch(ctx context.Context, rootCID cid.Cid) (mount.Reader, 
 
 	resp, err := g.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute http request")
+		return nil, fmt.Errorf("failed to execute http request: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("http req failed: code: %d, status: '%s'", resp.StatusCode, resp.Status)

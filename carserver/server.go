@@ -2,6 +2,7 @@ package carserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -59,10 +60,14 @@ func (l *CarServer) ServeCARFile(ctx context.Context, dr *types.DagTraversalRequ
 		}
 		return nil
 	}); err != nil {
-		if err := l.spai.RecordRetrievalServed(ctx, sw.n, 1); err != nil {
-			l.logger.LogError(dr.RequestId, "failed to record retrieval failure", err)
+		if errors.Is(err, carstore.ErrNotFound) {
+			l.logger.Infow(dr.RequestId, "not serving CAR as CAR not found", "err", err)
+		} else {
+			if err := l.spai.RecordRetrievalServed(ctx, sw.n, 1); err != nil {
+				l.logger.LogError(dr.RequestId, "failed to record retrieval failure", err)
+			}
+			l.logger.LogError(dr.RequestId, "failed to traverse and serve car", err)
 		}
-		l.logger.LogError(dr.RequestId, "failed to traverse and serve car", err)
 
 		return err
 	}
