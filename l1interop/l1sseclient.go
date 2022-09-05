@@ -239,10 +239,6 @@ func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
 	}
 }
 
-func (l *l1SseClient) serve() {
-
-}
-
 func (l *l1SseClient) Stop() {
 	l.cancelF()
 	l.wg.Wait()
