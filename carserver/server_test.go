@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -103,7 +102,6 @@ func TestParallelTransfers(t *testing.T) {
 		count++
 		reqBz := mkRequestWithoutSelector(t, root1, 0)
 		resp := sendHttpReq(t, url, reqBz)
-		fmt.Println(resp.StatusCode)
 		if resp.StatusCode == http.StatusOK {
 			bz := readHTTPResponse(t, resp)
 			return bytes.Equal(contents1, bz)
