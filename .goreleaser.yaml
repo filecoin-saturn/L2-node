@@ -25,13 +25,9 @@ builds:
     main: ./cmd/saturn-l2
     env:
       - CGO_ENABLED=0
-signs:
-  - ids:
-      - saturn-L2-node-macos
-    cmd: gon
-    args:
-    - gon.hcl
-    artifacts: all
+    hooks:
+      post:
+        - gon gon.hcl
 
 archives:
   - replacements:
