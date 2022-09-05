@@ -27,7 +27,7 @@ builds:
       - CGO_ENABLED=0
     hooks:
       post:
-        - gon gon.hcl
+        - gon .gon.hcl
 
 archives:
   - replacements:
