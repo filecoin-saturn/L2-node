@@ -43,10 +43,16 @@ func (s *StationAPIImpl) RecordRetrievalServed(ctx context.Context, bytesServed,
 	return s.createOrUpdateReqStatsUnlocked(ctx, func(r *station.ReqStats) {
 		r.TotalBytesUploaded = bytesServed
 		r.NContentRequests = 1
+		if nErrors == 0 {
+			r.NSuccessfulRetrievals = 1
+		}
 		r.NContentReqErrors = nErrors
 	}, func(r *station.ReqStats) {
 		r.TotalBytesUploaded += bytesServed
 		r.NContentRequests += 1
+		if nErrors == 0 {
+			r.NSuccessfulRetrievals += 1
+		}
 		r.NContentReqErrors += nErrors
 	})
 }

@@ -29,8 +29,9 @@ type StorageStats struct {
 }
 
 type ReqStats struct {
-	TotalBytesUploaded   uint64
-	TotalBytesDownloaded uint64
-	NContentRequests     uint64
-	NContentReqErrors    uint64
+	TotalBytesUploaded    uint64
+	TotalBytesDownloaded  uint64
+	NContentRequests      uint64
+	NContentReqErrors     uint64
+	NSuccessfulRetrievals uint64
 }

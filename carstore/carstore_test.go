@@ -88,7 +88,7 @@ func TestPersistentCache(t *testing.T) {
 		return err == nil
 	}, 50*time.Second, 200*time.Millisecond)
 
-	require.NoError(t, csh.cs.Close())
+	require.NoError(t, csh.cs.Stop())
 	require.EqualValues(t, 2*len(bz), csh.ms.nDownloaded())
 
 	csh.assertStorageStats(t, station.StorageStats{uint64(len(bz))})
@@ -221,7 +221,7 @@ func TestDownloadTimeout(t *testing.T) {
 	// second try -> not found
 	csh.fetchAndAssertNotFound(reqID, rootcid)
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	// still errors out
 	csh.fetchAndAssertNotFound(reqID, rootcid)

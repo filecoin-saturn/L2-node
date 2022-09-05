@@ -3,7 +3,6 @@ package carserver
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -22,6 +21,7 @@ import (
 	dss "github.com/ipfs/go-datastore/sync"
 
 	"github.com/filecoin-project/saturn-l2/logs"
+	_ "github.com/ipld/go-ipld-prime/codec/dagcbor"
 
 	cid "github.com/ipfs/go-cid"
 
@@ -176,7 +176,7 @@ func (csh *carServerHarness) assertStationStats(t *testing.T, ctx context.Contex
 }
 
 func (csh *carServerHarness) Stop(t *testing.T) {
-	require.NoError(t, csh.store.Close())
+	require.NoError(t, csh.store.Stop())
 	csh.gwapi.Close()
 	csh.carserver.Close()
 }
@@ -208,7 +208,32 @@ func buildHarness(t *testing.T, ctx context.Context) *carServerHarness {
 	// create and start the car server
 	carserver := New(cs, lg, sapi)
 	csvc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		carserver.ServeCARFile(w, r)
+		bz, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		var cr types.CARTransferRequest
+		if err := json.Unmarshal(bz, &cr); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		dr, err := cr.ToDAGRequest()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		err = carserver.ServeCARFile(ctx, dr, w)
+		if errors.Is(err, carstore.ErrNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 	}))
 
 	return &carServerHarness{
@@ -233,8 +258,8 @@ func readHTTPResponse(t *testing.T, resp *http.Response) []byte {
 
 func mkRequestWithoutSelector(t *testing.T, root cid.Cid, offset uint64) []byte {
 	req := types.CARTransferRequest{
-		Root:       base64.StdEncoding.EncodeToString(root.Bytes()),
-		ReqId:      uuid.New().String(),
+		Root:       root.String(),
+		RequestId:  uuid.New().String(),
 		SkipOffset: offset,
 	}
 	reqBz, err := json.Marshal(req)
