@@ -46,7 +46,7 @@ func TestStationAPIImpl(t *testing.T) {
 			TotalBytesDownloaded: 300,
 		}}, as)
 
-	require.NoError(t, sapi.RecordRetrievalServed(ctx, 100, 0))
+	require.NoError(t, sapi.RecordRetrievalServed(ctx, 100, 0, 0, 1))
 	as, err = sapi.AllStats(ctx)
 	require.NoError(t, err)
 	require.Equal(t, station.StationStats{RPInfo: station.RPInfo{Version: Version},
@@ -55,12 +55,14 @@ func TestStationAPIImpl(t *testing.T) {
 		},
 		ReqStats: station.ReqStats{
 			TotalBytesUploaded:    100,
-			NContentRequests:      1,
 			TotalBytesDownloaded:  300,
 			NSuccessfulRetrievals: 1,
+			NContentRequests:      1,
+			NContentNotFoundReqs:  0,
+			NContentReqErrors:     0,
 		}}, as)
 
-	require.NoError(t, sapi.RecordRetrievalServed(ctx, 500, 2))
+	require.NoError(t, sapi.RecordRetrievalServed(ctx, 500, 2, 0, 0))
 	as, err = sapi.AllStats(ctx)
 	require.NoError(t, err)
 	require.Equal(t, station.StationStats{RPInfo: station.RPInfo{Version: Version},
@@ -93,7 +95,7 @@ func TestStationAPIImpl(t *testing.T) {
 			TotalBytesDownloaded:  300,
 		}}, as)
 
-	require.NoError(t, sapi.RecordRetrievalServed(ctx, 500, 0))
+	require.NoError(t, sapi.RecordRetrievalServed(ctx, 500, 0, 1, 1))
 	as, err = sapi.AllStats(ctx)
 	require.NoError(t, err)
 	require.Equal(t, station.StationStats{RPInfo: station.RPInfo{Version: Version},
@@ -106,6 +108,23 @@ func TestStationAPIImpl(t *testing.T) {
 			NContentReqErrors:     2,
 			NSuccessfulRetrievals: 2,
 			TotalBytesDownloaded:  300,
+			NContentNotFoundReqs:  1,
+		}}, as)
+
+	require.NoError(t, sapi.RecordRetrievalServed(ctx, 500, 0, 1, 0))
+	as, err = sapi.AllStats(ctx)
+	require.NoError(t, err)
+	require.Equal(t, station.StationStats{RPInfo: station.RPInfo{Version: Version},
+		StorageStats: station.StorageStats{
+			BytesCurrentlyStored: 790,
+		},
+		ReqStats: station.ReqStats{
+			TotalBytesUploaded:    1600,
+			NContentRequests:      4,
+			NContentReqErrors:     2,
+			NSuccessfulRetrievals: 2,
+			TotalBytesDownloaded:  300,
+			NContentNotFoundReqs:  2,
 		}}, as)
 
 }

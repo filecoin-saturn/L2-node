@@ -36,24 +36,22 @@ func (s *StationAPIImpl) SetStorageStatsFetcher(ss station.StorageStatsFetcher) 
 	s.ss = ss
 }
 
-func (s *StationAPIImpl) RecordRetrievalServed(ctx context.Context, bytesServed, nErrors uint64) error {
+func (s *StationAPIImpl) RecordRetrievalServed(ctx context.Context, bytesServed, nErrors, nNotFound, nSuccess uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	return s.createOrUpdateReqStatsUnlocked(ctx, func(r *station.ReqStats) {
 		r.TotalBytesUploaded = bytesServed
 		r.NContentRequests = 1
-		if nErrors == 0 {
-			r.NSuccessfulRetrievals = 1
-		}
+		r.NContentNotFoundReqs = nNotFound
 		r.NContentReqErrors = nErrors
+		r.NSuccessfulRetrievals = nSuccess
 	}, func(r *station.ReqStats) {
 		r.TotalBytesUploaded += bytesServed
 		r.NContentRequests += 1
-		if nErrors == 0 {
-			r.NSuccessfulRetrievals += 1
-		}
+		r.NContentNotFoundReqs += nNotFound
 		r.NContentReqErrors += nErrors
+		r.NSuccessfulRetrievals += nSuccess
 	})
 }
 

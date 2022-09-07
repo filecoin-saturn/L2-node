@@ -39,7 +39,7 @@ func TestSimpleTransfer(t *testing.T) {
 	csh := buildHarness(t, ctx)
 	defer csh.Stop(t)
 
-	csh.assertStationStats(t, ctx, 0, 0, 0, 0, 0)
+	csh.assertStationStats(t, ctx, 0, 0, 0, 0, 0, 0, 0)
 
 	url := csh.carserver.URL
 	root := csh.root1
@@ -69,7 +69,7 @@ func TestSimpleTransfer(t *testing.T) {
 	// ensure contents match
 	require.EqualValues(t, contents, bz)
 
-	csh.assertStationStats(t, ctx, len(contents), len(contents), 3, 2, len(contents))
+	csh.assertStationStats(t, ctx, len(contents), len(contents), 3, 0, len(contents), 2, 1)
 
 	// send request with the skip param
 	reqBz = mkRequestWithoutSelector(t, root, 101)
@@ -79,7 +79,7 @@ func TestSimpleTransfer(t *testing.T) {
 	bz = readHTTPResponse(t, resp)
 	require.EqualValues(t, contents[101:], bz)
 
-	csh.assertStationStats(t, ctx, len(contents)+len(contents)-101, len(contents), 4, 2, len(contents))
+	csh.assertStationStats(t, ctx, len(contents)+len(contents)-101, len(contents), 4, 0, len(contents), 2, 2)
 }
 
 func TestParallelTransfers(t *testing.T) {
@@ -87,7 +87,7 @@ func TestParallelTransfers(t *testing.T) {
 	csh := buildHarness(t, ctx)
 	defer csh.Stop(t)
 
-	csh.assertStationStats(t, ctx, 0, 0, 0, 0, 0)
+	csh.assertStationStats(t, ctx, 0, 0, 0, 0, 0, 0, 0)
 
 	url := csh.carserver.URL
 	root1 := csh.root1
@@ -122,7 +122,7 @@ func TestParallelTransfers(t *testing.T) {
 	}, 5*time.Second, 100*time.Millisecond)
 
 	l := len(contents1) + len(contents2)
-	csh.assertStationStats(t, ctx, l, l, count, count-2, l)
+	csh.assertStationStats(t, ctx, l, l, count, 0, l, count-2, 2)
 
 	var errg errgroup.Group
 
@@ -151,7 +151,7 @@ func TestParallelTransfers(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	csh.assertStationStats(t, ctx, 6*l, l, count+10, count-2, l)
+	csh.assertStationStats(t, ctx, 6*l, l, count+10, 0, l, count-2, 12)
 }
 
 type carServerHarness struct {
@@ -165,7 +165,8 @@ type carServerHarness struct {
 	bz2       []byte
 }
 
-func (csh *carServerHarness) assertStationStats(t *testing.T, ctx context.Context, upload, download, reqs, errors, storage int) {
+func (csh *carServerHarness) assertStationStats(t *testing.T, ctx context.Context, upload, download, reqs, errors, storage int, nNotFound int,
+	nSuccess int) {
 	as, err := csh.sapi.AllStats(ctx)
 	require.NoError(t, err)
 	require.EqualValues(t, upload, as.TotalBytesUploaded)
@@ -173,6 +174,8 @@ func (csh *carServerHarness) assertStationStats(t *testing.T, ctx context.Contex
 	require.EqualValues(t, errors, as.NContentReqErrors)
 	require.EqualValues(t, download, as.TotalBytesDownloaded)
 	require.EqualValues(t, storage, as.StorageStats.BytesCurrentlyStored)
+	require.EqualValues(t, nNotFound, as.NContentNotFoundReqs)
+	require.EqualValues(t, nSuccess, as.NSuccessfulRetrievals)
 }
 
 func (csh *carServerHarness) Stop(t *testing.T) {

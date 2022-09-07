@@ -263,7 +263,7 @@ func newCarStoreHarness(t *testing.T, apiurl string, cfg Config) *carstoreHarnes
 	ctx := context.Background()
 	temp := t.TempDir()
 
-	cs, err := New(temp, NewGatewayAPI(apiurl, sapi), cfg, lg)
+	cs, err := New(temp, NewGatewayAPI(apiurl, sapi, 100000000), cfg, lg)
 	require.NoError(t, err)
 	require.NoError(t, cs.Start(ctx))
 

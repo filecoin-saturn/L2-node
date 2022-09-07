@@ -22,7 +22,7 @@ func TestGatewayAPI(t *testing.T) {
 	svc := testutils.GetTestServer(t, root, bz)
 	defer svc.Close()
 
-	gw := NewGatewayAPI(svc.URL, nil)
+	gw := NewGatewayAPI(svc.URL, nil, 10000)
 
 	c, err := cid.Decode(root)
 	require.NoError(t, err)
@@ -43,7 +43,7 @@ func TestGatewayAPIFailure(t *testing.T) {
 	defer svc.Close()
 
 	ctx := context.Background()
-	gw := NewGatewayAPI(svc.URL, nil)
+	gw := NewGatewayAPI(svc.URL, nil, 10000)
 
 	c, err := cid.Decode(root)
 	require.NoError(t, err)
@@ -70,4 +70,25 @@ func TestIPFSGateway(t *testing.T) {
 	bz, err := ioutil.ReadAll(rd)
 	require.NoError(t, err)
 	require.NotEmpty(t, bz)
+}
+
+func TestDownloadFailsIfTooLarge(t *testing.T) {
+	ctx := context.Background()
+
+	bz := []byte("hello")
+	svc := testutils.GetTestServer(t, root, bz)
+	defer svc.Close()
+
+	gw := NewGatewayAPI(svc.URL, nil, 1)
+
+	c, err := cid.Decode(root)
+	require.NoError(t, err)
+
+	rd, err := gw.Fetch(ctx, c)
+	require.NoError(t, err)
+	require.NotEmpty(t, rd)
+
+	out, err := ioutil.ReadAll(rd)
+	require.Error(t, ErrDownloadTooLarge)
+	require.Empty(t, out)
 }

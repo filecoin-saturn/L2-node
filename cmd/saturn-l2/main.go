@@ -122,6 +122,8 @@ var (
 	maxL1DiscoveryAttempts = float64(10)
 	maxL1DiscoveryBackoff  = 60 * time.Second
 	minL1DiscoveryBackoff  = 2 * time.Second
+
+	maxDownloadPerRequest = 2147483648 // 2 Gib
 )
 
 type config struct {
@@ -134,6 +136,7 @@ type config struct {
 	MaxConcurrentL1Requests int
 	UseTestL1IPAddrs        bool
 	TestL1IPAddr            L1IPAddrs
+	MaxDownloadPerRequest   uint64
 }
 
 func main() {
@@ -188,7 +191,7 @@ func main() {
 	if cfg.UseTestL1IPAddrs {
 		l1IPAddrs = cfg.TestL1IPAddr
 	} else {
-		l1IPAddrs, err = getNearestL1sWithRetry(ctx, cfg)
+		l1IPAddrs, err = getNearestL1sWithRetry(ctx, cfg, maxL1DiscoveryAttempts)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to get nearest L1s to connect to: %s\n", err.Error())
 			os.Exit(2)
@@ -442,6 +445,7 @@ func mkConfig() (config, error) {
 		MaxConcurrentL1Requests: int(maxConcurrentL1Reqs),
 		UseTestL1IPAddrs:        useL1IPAddrs,
 		TestL1IPAddr:            l1IPAddrs,
+		MaxDownloadPerRequest:   uint64(maxDownloadPerRequest),
 	}, nil
 }
 
@@ -460,7 +464,7 @@ func parseL1IPs(l1IPsStr string) (L1IPAddrs, error) {
 	return l1IPAddrs, nil
 }
 
-func getNearestL1sWithRetry(ctx context.Context, cfg config) (L1IPAddrs, error) {
+func getNearestL1sWithRetry(ctx context.Context, cfg config, maxL1DiscoveryAttempts float64) (L1IPAddrs, error) {
 	backoff := &backoff.Backoff{
 		Min:    minL1DiscoveryBackoff,
 		Max:    maxL1DiscoveryBackoff,
@@ -558,7 +562,7 @@ func buildCarServer(cfg config, logger *logs.SaturnLogger) (*CARServer, error) {
 	}
 
 	sapi := carserver.NewStationAPIImpl(dss, nil)
-	gwApi := carstore.NewGatewayAPI(gateway_base_url, sapi)
+	gwApi := carstore.NewGatewayAPI(gateway_base_url, sapi, cfg.MaxDownloadPerRequest)
 	carStoreConfig := carstore.Config{
 		MaxCARFilesDiskSpace: int64(cfg.MaxDiskSpace),
 	}

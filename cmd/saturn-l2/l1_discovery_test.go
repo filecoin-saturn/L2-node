@@ -29,12 +29,12 @@ func TestL1Discovery(t *testing.T) {
 		L1DiscoveryAPIUrl: svc.URL,
 		MaxL1Connections:  100,
 	}
-	l1s, err := getNearestL1sWithRetry(ctx, cfg)
+	l1s, err := getNearestL1sWithRetry(ctx, cfg, 1)
 	require.NoError(t, err)
 	require.Len(t, l1s, 3)
 
 	cfg.MaxL1Connections = 1
-	l1s, err = getNearestL1sWithRetry(ctx, cfg)
+	l1s, err = getNearestL1sWithRetry(ctx, cfg, 1)
 	require.NoError(t, err)
 	require.Len(t, l1s, 1)
 	require.EqualValues(t, ip1, l1s[0])
@@ -49,7 +49,7 @@ func TestL1DiscoveryFailure(t *testing.T) {
 		L1DiscoveryAPIUrl: svc.URL,
 		MaxL1Connections:  100,
 	}
-	l1s, err := getNearestL1sWithRetry(context.Background(), cfg)
+	l1s, err := getNearestL1sWithRetry(context.Background(), cfg, 1)
 	require.Error(t, err)
 	require.Empty(t, l1s)
 }
