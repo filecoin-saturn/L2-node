@@ -47,30 +47,31 @@ func (l *CarServer) ServeCARFile(ctx context.Context, dr *types.DagTraversalRequ
 
 		_, err := car.TraverseV1(ctx, &ls, dr.Root, dr.Selector, sw, car.WithSkipOffset(dr.SkipOffset))
 		if err != nil {
-			if err := l.spai.RecordRetrievalServed(ctx, sw.n, 1); err != nil {
-				l.logger.LogError(dr.RequestId, "failed to record retrieval failure", err)
-			}
-
 			l.logger.LogError(dr.RequestId, "car traversal failed", err)
 			return fmt.Errorf("car traversal failed: %w", err)
 		}
 
-		if err := l.spai.RecordRetrievalServed(ctx, sw.n, 0); err != nil {
-			l.logger.LogError(dr.RequestId, "failed to record successful retrieval", err)
-		}
 		return nil
 	}); err != nil {
-		if err := l.spai.RecordRetrievalServed(ctx, sw.n, 1); err != nil {
-			l.logger.LogError(dr.RequestId, "failed to record retrieval failure", err)
-		}
-
 		if errors.Is(err, carstore.ErrNotFound) {
+			if err := l.spai.RecordRetrievalServed(ctx, sw.n, 0, 1, 0); err != nil {
+				l.logger.LogError(dr.RequestId, "failed to record retrieval not found", err)
+			}
+
 			l.logger.Infow(dr.RequestId, "not serving CAR as CAR not found", "err", err)
 		} else {
+			if err := l.spai.RecordRetrievalServed(ctx, sw.n, 1, 0, 0); err != nil {
+				l.logger.LogError(dr.RequestId, "failed to record retrieval failure", err)
+			}
+
 			l.logger.LogError(dr.RequestId, "failed to traverse and serve car", err)
 		}
 
 		return err
+	} else if err == nil {
+		if err := l.spai.RecordRetrievalServed(ctx, sw.n, 0, 0, 1); err != nil {
+			l.logger.LogError(dr.RequestId, "failed to record successful retrieval", err)
+		}
 	}
 
 	l.logger.Infow(dr.RequestId, "car transfer successful")

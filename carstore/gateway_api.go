@@ -2,6 +2,7 @@ package carstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,9 @@ import (
 
 var (
 	defaultURL = "https://ipfs.io/api/v0/dag/export"
+	// ErrDownloadTooLarge means that the file being downloaded from the IPFS Gateway is larger than the
+	// maximum size allowed.
+	ErrDownloadTooLarge = errors.New("download is too large")
 )
 
 type GatewayAPI interface {
@@ -23,19 +27,21 @@ type GatewayAPI interface {
 var _ GatewayAPI = (*gatewayAPI)(nil)
 
 type gatewayAPI struct {
-	client  *http.Client
-	baseURL string
-	sApi    station.StationAPI
+	client                *http.Client
+	baseURL               string
+	sApi                  station.StationAPI
+	maxDownloadPerRequest uint64
 }
 
-func NewGatewayAPI(baseURL string, sApi station.StationAPI) *gatewayAPI {
+func NewGatewayAPI(baseURL string, sApi station.StationAPI, maxDownloadPerRequest uint64) *gatewayAPI {
 	client := &http.Client{
 		Timeout: defaultDownloadTimeout,
 	}
 	return &gatewayAPI{
-		client:  client,
-		baseURL: baseURL,
-		sApi:    sApi,
+		maxDownloadPerRequest: maxDownloadPerRequest,
+		client:                client,
+		baseURL:               baseURL,
+		sApi:                  sApi,
 	}
 }
 
@@ -57,9 +63,10 @@ func (g *gatewayAPI) Fetch(ctx context.Context, rootCID cid.Cid) (mount.Reader, 
 	}
 
 	return &GatewayReader{
-		ctx:        ctx,
-		ReadCloser: resp.Body,
-		sapi:       g.sApi,
+		ctx:                   ctx,
+		ReadCloser:            resp.Body,
+		sapi:                  g.sApi,
+		maxDownloadPerRequest: g.maxDownloadPerRequest,
 	}, nil
 }
 
@@ -74,11 +81,16 @@ type GatewayReader struct {
 	n uint64
 
 	sapi station.StationAPI
+
+	maxDownloadPerRequest uint64
 }
 
 func (gw *GatewayReader) Read(p []byte) (int, error) {
 	n, err := gw.ReadCloser.Read(p)
 	gw.n += uint64(n)
+	if gw.n >= gw.maxDownloadPerRequest {
+		return n, ErrDownloadTooLarge
+	}
 	return n, err
 }
 

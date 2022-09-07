@@ -5,7 +5,7 @@ import (
 )
 
 type StationAPI interface {
-	RecordRetrievalServed(ctx context.Context, bytesServed, nErrors uint64) error
+	RecordRetrievalServed(ctx context.Context, bytesServed, nErrors, nNotFound, nSuccess uint64) error
 	AllStats(ctx context.Context) (StationStats, error)
 	RecordDataDownloaded(ctx context.Context, bytesDownloaded uint64) error
 }
@@ -32,6 +32,8 @@ type ReqStats struct {
 	TotalBytesUploaded    uint64
 	TotalBytesDownloaded  uint64
 	NContentRequests      uint64
-	NContentReqErrors     uint64
+	NContentNotFoundReqs  uint64
 	NSuccessfulRetrievals uint64
+
+	NContentReqErrors uint64
 }

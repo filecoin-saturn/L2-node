@@ -20,7 +20,7 @@ func TestGatewayMount(t *testing.T) {
 	svc := testutils.GetTestServer(t, root, bz)
 	defer svc.Close()
 
-	gwAPI := NewGatewayAPI(svc.URL, &mockStationAPI{})
+	gwAPI := NewGatewayAPI(svc.URL, &mockStationAPI{}, 10000)
 	ctx := context.Background()
 	c, err := cid.Decode(root)
 	require.NoError(t, err)

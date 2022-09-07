@@ -120,7 +120,7 @@ func New(rootDir string, gwAPI GatewayAPI, cfg Config, logger *logs.SaturnLogger
 		TopLevelIndex:             topIndex,
 		MaxConcurrentIndex:        maxConcurrentIndex,
 		MaxConcurrentReadyFetches: maxConcurrentReadyFetches,
-		RecoverOnStart:            dagstore.RecoverOnAcquire,
+		RecoverOnStart:            dagstore.DoNotRecover,
 		AutomatedGCEnabled:        true,
 		AutomatedGCConfig: &dagstore.AutomatedGCConfig{
 			GarbeCollectionStrategy:   gc.NewLRUGarbageCollector(),
