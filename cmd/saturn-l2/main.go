@@ -140,6 +140,8 @@ type config struct {
 }
 
 func main() {
+	//logging.SetAllLoggers(logging.LevelInfo)
+	logging.SetLogLevel("dagstore", "ERROR")
 	// build app context
 	cleanup := func() {
 
@@ -152,7 +154,6 @@ func main() {
 		cleanup()
 	}()
 
-	logging.SetAllLoggers(logging.LevelInfo)
 	ctx, cancel := context.WithCancel(context.Background())
 	cleanup = updateCleanup(cleanup, func() {
 		log.Info("shutting down all threads")
@@ -198,6 +199,7 @@ func main() {
 		}
 	}
 	log.Infow("discovered L1s", "l1 IP Addrs", strings.Join(l1IPAddrs, ", "))
+	fmt.Println("INFO: Saturn Node was able to connect to the Orchestrator and will now start connecting to the Saturn network...")
 
 	// build the saturn logger
 	logger := logs.NewSaturnLogger()
@@ -327,6 +329,20 @@ func logL1Connectivity(ctx context.Context, nConnectedL1s *atomic.Uint64) {
 	defer ticker.Stop()
 
 	lastNConnected := uint64(0)
+
+	// get to the first connectivity event as fast as possible
+	go func() {
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			nConnected := nConnectedL1s.Load()
+			if nConnected != 0 {
+				fmt.Printf("INFO: Saturn Node is online and connected to %d peers\n", nConnected)
+				return
+			}
+		}
+	}()
 
 	for {
 		select {
@@ -472,6 +488,8 @@ func getNearestL1sWithRetry(ctx context.Context, cfg config, maxL1DiscoveryAttem
 		Jitter: true,
 	}
 
+	fmt.Println("INFO: Saturn Node will try to connect to the Saturn Orchestrator...")
+
 	for {
 		l1Addrs, err := getNearestL1s(ctx, cfg)
 		if err == nil {
@@ -485,6 +503,7 @@ func getNearestL1sWithRetry(ctx context.Context, cfg config, maxL1DiscoveryAttem
 		}
 
 		log.Errorw("failed to get L1s from orchestrator; will retry", "err", err)
+		fmt.Println("INFO: Saturn Node is unable to connect to the Orchestrator, retrying....")
 
 		// backoff and wait before making a new request to the orchestrator.
 		duration := backoff.Duration()

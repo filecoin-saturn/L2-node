@@ -182,43 +182,42 @@ func (l *l1SseClient) Start(nConnectedl1s *atomic.Uint64) error {
 				continue
 			}
 
-			log.Debugw("will try to acquire semaphore for l1 request", "l1", l.l1Addr)
-			select {
-			case l.semaphore <- struct{}{}:
-				log.Debugw("successfully acquired semaphore for l1 request", "l1", l.l1Addr)
-			case <-l.ctx.Done():
-				return l.ctx.Err()
-			}
-
-			releaseSem := func() {
-				select {
-				case <-l.semaphore:
-					log.Debugw("successfully released semaphore for l1 request", "l1", l.l1Addr)
-				case <-l.ctx.Done():
-					return
-				}
-			}
-
 			log.Infow("received request from L1", "l1", l.l1Addr, "json", reqJSON)
 
 			var carReq types.CARTransferRequest
 			if err := json.Unmarshal([]byte(reqJSON), &carReq); err != nil {
-				releaseSem()
+				nConnectedl1s.Dec()
 				return fmt.Errorf("could not unmarshal l1 request: req=%s, err=%w", reqJSON, err)
 			}
 
 			dr, err := carReq.ToDAGRequest()
 			if err != nil {
-				releaseSem()
+				nConnectedl1s.Dec()
 				return fmt.Errorf("could not parse car transfer request,err=%w", err)
 			}
 
 			l.logger.Infow(dr.RequestId, "parsed CAR transfer request received from L1", "l1", l.l1Addr, "req", dr)
 
+			log.Debugw("will try to acquire semaphore for l1 request", "l1", l.l1Addr)
+			select {
+			case l.semaphore <- struct{}{}:
+				log.Debugw("successfully acquired semaphore for l1 request", "l1", l.l1Addr)
+			case <-l.ctx.Done():
+				nConnectedl1s.Dec()
+				return l.ctx.Err()
+			}
+
 			l.wg.Add(1)
 			go func() {
 				defer l.wg.Done()
-				defer releaseSem()
+				defer func() {
+					select {
+					case <-l.semaphore:
+						log.Debugw("successfully released semaphore for l1 request", "l1", l.l1Addr)
+					case <-l.ctx.Done():
+						return
+					}
+				}()
 
 				if err := l.sendCarResponse(l.ctx, l.l1Addr, dr); err != nil {
 					if !errors.Is(err, carstore.ErrNotFound) {
