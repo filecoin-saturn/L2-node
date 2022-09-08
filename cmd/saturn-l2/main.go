@@ -140,7 +140,7 @@ type config struct {
 }
 
 func main() {
-	//logging.SetAllLoggers(logging.LevelInfo)
+	logging.SetAllLoggers(logging.LevelInfo)
 	logging.SetLogLevel("dagstore", "ERROR")
 	// build app context
 	cleanup := func() {
