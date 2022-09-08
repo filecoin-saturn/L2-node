@@ -338,7 +338,7 @@ func logL1Connectivity(ctx context.Context, nConnectedL1s *atomic.Uint64) {
 				fmt.Print("ERROR: Saturn Node is not able to connect to the network\n")
 			} else {
 				if nConnected != lastNConnected {
-					fmt.Printf("Saturn Node is online and connected to %d peers\n", nConnected)
+					fmt.Printf("INFO: Saturn Node is online and connected to %d peers\n", nConnected)
 				}
 			}
 
