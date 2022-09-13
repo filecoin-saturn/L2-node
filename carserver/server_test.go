@@ -200,7 +200,7 @@ func buildHarness(t *testing.T, ctx context.Context) *carServerHarness {
 
 	// create the getway api with a test http server
 	svc := testutils.GetTestServerForRoots(t, out)
-	gwAPI := carstore.NewGatewayAPI(svc.URL, sapi)
+	gwAPI := carstore.NewGatewayAPI(svc.URL, sapi, 10000000)
 	lg := logs.NewSaturnLogger()
 	cfg := carstore.Config{MaxCARFilesDiskSpace: 100000000}
 	cs, err := carstore.New(temp, gwAPI, cfg, lg)
