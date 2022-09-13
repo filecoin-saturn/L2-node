@@ -1,42 +1,167 @@
-# Use the latest 2.1 version of CircleCI pipeline process engine.
-# See: https://circleci.com/docs/2.0/configuration-reference
 version: 2.1
+orbs:
+  go: gotest/tools@0.0.13
 
-# Define a job to be invoked later in a workflow.
-# See: https://circleci.com/docs/2.0/configuration-reference/#jobs
-jobs:
-  build:
-    working_directory: ~/repo
-    # Specify the execution environment. You can specify an image from Dockerhub or use one of our Convenience Images from CircleCI's Developer Hub.
-    # See: https://circleci.com/docs/2.0/configuration-reference/#docker-machine-macos-windows-executor
+executors:
+  golang:
     docker:
-      - image: cimg/go:1.18
-    # Add steps to the job
-    # See: https://circleci.com/docs/2.0/configuration-reference/#steps
+      - image: circleci/golang:1.18.2
+    resource_class: 2xlarge
+  ubuntu:
+    docker:
+      - image: ubuntu:20.04
+
+commands:
+  install-deps:
+    steps:
+      - go/install-ssh
+      - go/install: {package: git}
+  prepare:
+    parameters:
+      linux:
+        default: true
+        description: is a linux build environment?
+        type: boolean
+      darwin:
+        default: false
+        description: is a darwin build environment?
+        type: boolean
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - go-mod-v4-{{ checksum "go.sum" }}
+      - git_fetch_all_tags
+      - checkout
+      - when:
+          condition: << parameters.linux >>
+          steps:
+            - run: sudo apt-get update
+            - run: sudo apt-get install ocl-icd-opencl-dev libhwloc-dev
+      - run: git submodule sync
+      - run: git submodule update --init
+  git_fetch_all_tags:
+    steps:
       - run:
-          name: Install Dependencies
-          command: go mod download
-      - save_cache:
-          key: go-mod-v4-{{ checksum "go.sum" }}
-          paths:
-            - "/go/pkg/mod"
-      - run:
-          name: Run tests
+          name: fetch all tags
           command: |
-            mkdir -p /tmp/test-reports
-            gotestsum --junitfile /tmp/test-reports/unit-tests.xml
-      - store_test_results:
-          path: /tmp/test-reports
+            git fetch --all
 
-# Invoke jobs via workflows
-# See: https://circleci.com/docs/2.0/configuration-reference/#workflows
+jobs:
+  mod-tidy-check:
+    executor: golang
+    steps:
+      - install-deps
+      - prepare
+      - go/mod-tidy-check
+
+  build-all:
+    executor: golang
+    steps:
+      - install-deps
+      - prepare
+      - run: sudo apt-get update
+      - run: sudo apt-get install npm
+      - run:
+          command: make build-go
+      - store_artifacts:
+          path: boost
+      - run: mkdir linux && mv boost linux/
+      - persist_to_workspace:
+          root: "."
+          paths:
+            - linux
+
+  test:
+    description: |
+      Run go tests
+    parameters: &test-params
+      executor:
+        type: executor
+        default: golang
+      go-test-flags:
+        type: string
+        default: "-v --tags=debug -timeout 15m"
+        description: Flags passed to go test.
+      target:
+        type: string
+        default: "./..."
+        description: Import paths of packages to be tested.
+      suite:
+        type: string
+        default: unit
+        description: Test suite name to report to CircleCI.
+    executor: << parameters.executor >>
+    steps:
+      - install-deps
+      - prepare
+      - run:
+          command: make debug
+          no_output_timeout: 30m
+      - run:
+          name: go test
+          command: |
+            go test \
+              << parameters.go-test-flags >> \
+              << parameters.target >>
+          no_output_timeout: 30m
+  gofmt:
+    executor: golang
+    steps:
+      - install-deps
+      - prepare
+      - run:
+          command: "! go fmt ./... 2>&1 | read"
+  lint: &lint
+    description: |
+      Run golangci-lint.
+    parameters:
+      executor:
+        type: executor
+        default: golang
+      golangci-lint-version:
+        type: string
+        default: 1.27.0
+      concurrency:
+        type: string
+        default: '2'
+        description: |
+          Concurrency used to run linters. Defaults to 2 because NumCPU is not
+          aware of container CPU limits.
+      args:
+        type: string
+        default: ''
+        description: |
+          Arguments to pass to golangci-lint
+    executor: << parameters.executor >>
+    steps:
+      - install-deps
+      - prepare
+      - run:
+          command: make debug deps
+          no_output_timeout: 30m
+      - go/install-golangci-lint:
+          gobin: $HOME/.local/bin
+          version: << parameters.golangci-lint-version >>
+      - run:
+          name: Lint
+          command: |
+            $HOME/.local/bin/golangci-lint run -v --timeout 2m \
+              --concurrency << parameters.concurrency >> << parameters.args >>
+  lint-all:
+    <<: *lint
+
 workflows:
-  sample: # This is the name of the workflow, feel free to change it to better match your workflow.
-    # Inside the workflow, you define the jobs you want to run.
+  version: 2.1
+  ci:
     jobs:
-      - build
+      - lint-all:
+          concurrency: "16"   # expend all docker 2xlarge CPUs.
+      - mod-tidy-check
+      - gofmt
+      - build-all:
+          filters:
+            tags:
+              only:
+                - /^v\d+\.\d+\.\d+(-rc\d+)?$/
+      - test:
+          name: test-all
+          suite: all
+          target: "`go list ./...`"
