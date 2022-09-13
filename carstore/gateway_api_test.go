@@ -88,7 +88,6 @@ func TestDownloadFailsIfTooLarge(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, rd)
 
-	out, err := ioutil.ReadAll(rd)
+	_, err = ioutil.ReadAll(rd)
 	require.Error(t, ErrDownloadTooLarge)
-	require.Empty(t, out)
 }
