@@ -3,7 +3,6 @@ package carstore
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -242,11 +241,9 @@ func (csh *carstoreHarness) fetchNAsyNC(rootCid cid.Cid, n int) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := csh.cs.FetchAndWriteCAR(uuid.New(), rootCid, func(_ bstore.Blockstore) error {
+			csh.cs.FetchAndWriteCAR(uuid.New(), rootCid, func(_ bstore.Blockstore) error { // nolint: errcheck
 				return nil
-			}); err != nil {
-				fmt.Println("Error in FetchAndWriteCAR", err.Error())
-			}
+			})
 		}()
 	}
 	wg.Wait()
