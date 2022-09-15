@@ -3,6 +3,7 @@ package carstore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -47,20 +48,25 @@ func TestPersistentCache(t *testing.T) {
 	csh.assertStorageStats(t, station.StorageStats{BytesCurrentlyStored: 0})
 	// first hit -> not found
 	csh.fetchAndAssertNotFound(reqID, rootcid)
+	fmt.Println("\n data downloaded after first hit is", csh.ms.nDownloaded())
 
 	// second hit -> not found
 	csh.fetchAndAssertNotFound(reqID, rootcid)
+	fmt.Println("\n data downloaded after second hit is", csh.ms.nDownloaded())
 
 	// wait till l2 has fetched and cached it
 	csh.assertAvailable(t, ctx, rootcid)
+	fmt.Println("\n data downloaded after caching is", csh.ms.nDownloaded())
 
 	// third hit -> found
 	csh.fetchAndAssertFound(ctx, reqID, rootcid)
 	require.EqualValues(t, len(bz), csh.ms.nDownloaded())
+	fmt.Println("\n data downloaded is after third hit", csh.ms.nDownloaded())
 
 	// fourth hit -> found
 	csh.fetchAndAssertFound(ctx, reqID, rootcid)
 	require.EqualValues(t, len(bz), csh.ms.nDownloaded())
+	fmt.Println("\n data downloaded after fetching success is", csh.ms.nDownloaded())
 
 	// wait for shard to become reclaimable again
 	require.Eventually(t, func() bool {
@@ -76,14 +82,18 @@ func TestPersistentCache(t *testing.T) {
 	require.Len(t, res.Shards, 1)
 	csh.assertStorageStats(t, station.StorageStats{BytesCurrentlyStored: 0})
 
+	fmt.Println("\n data downloaded after dagstore GC is", csh.ms.nDownloaded())
+
 	// fetch car -> fails as we do not have it but will trigger a fetch again
 	csh.fetchAndAssertNotFound(reqID, rootcid)
+	fmt.Println("\n data downloaded after fetch trigger fails is", csh.ms.nDownloaded())
 
 	// fetch car -> works now as car file was downloaded in the previous fetch
 	require.Eventually(t, func() bool {
 		err = csh.cs.FetchAndWriteCAR(reqID, rootcid, func(_ bstore.Blockstore) error {
 			return nil
 		})
+		fmt.Println("\n data downloaded  after a cycle is", csh.ms.nDownloaded())
 		return err == nil
 	}, 50*time.Second, 200*time.Millisecond)
 
