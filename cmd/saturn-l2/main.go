@@ -122,7 +122,7 @@ var (
 	maxL1DiscoveryBackoff  = 60 * time.Second
 	minL1DiscoveryBackoff  = 2 * time.Second
 
-	maxDownloadPerRequest = 2147483648 // 2 Gib
+	maxDownloadPerRequest = uint64(2147483648) // 2 Gib
 )
 
 type config struct {

@@ -70,6 +70,7 @@ func GetTestServerForRoots(t *testing.T, out map[string][]byte) *httptest.Server
 
 func GetTestServer(t *testing.T, root string, out []byte) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(1 * time.Second)
 		q := r.URL.Query()
 		v := q.Get("arg")
 		if len(v) == 0 || v != root {
