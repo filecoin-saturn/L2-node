@@ -14,7 +14,6 @@ import (
 )
 
 var (
-	defaultURL = "https://ipfs.io/api/v0/dag/export"
 	// ErrDownloadTooLarge means that the file being downloaded from the IPFS Gateway is larger than the
 	// maximum size allowed.
 	ErrDownloadTooLarge = errors.New("download is too large")
@@ -95,10 +94,10 @@ func (gw *GatewayReader) Read(p []byte) (int, error) {
 }
 
 func (gw *GatewayReader) Close() error {
-	var err error
-	err = gw.sapi.RecordDataDownloaded(gw.ctx, gw.n)
-	if err != nil {
+	if err := gw.sapi.RecordDataDownloaded(gw.ctx, gw.n); err != nil {
 		log.Errorw("failed to record download stats", "err", err)
+		return err
 	}
-	return err
+
+	return nil
 }

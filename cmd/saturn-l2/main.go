@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -141,13 +140,15 @@ type config struct {
 
 func main() {
 	logging.SetAllLoggers(logging.LevelInfo)
-	logging.SetLogLevel("dagstore", "ERROR")
+	if err := logging.SetLogLevel("dagstore", "ERROR"); err != nil {
+		panic(err)
+	}
 	// build app context
 	cleanup := func() {
 
 	}
 	defer cleanup()
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
@@ -227,7 +228,9 @@ func main() {
 	}
 	cleanup = updateCleanup(cleanup, func() {
 		log.Info("shutting down the CAR server")
-		carserver.Stop(ctx)
+		if err := carserver.Stop(ctx); err != nil {
+			log.Errorw("failed to stop car server", "err", err)
+		}
 	})
 
 	// Connect and register with all L1s and start serving their requests
@@ -297,7 +300,9 @@ func main() {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write(bz)
+		if _, err := w.Write(bz); err != nil {
+			http.Error(w, "failed to write stats to response", http.StatusInternalServerError)
+		}
 	}))
 
 	srv := &http.Server{
@@ -537,7 +542,7 @@ func getNearestL1s(ctx context.Context, cfg config) (L1IPAddrs, error) {
 	defer resp.Body.Close()
 
 	rd := io.LimitReader(resp.Body, maxL1DiscoveryResponseSize)
-	l1ips, err := ioutil.ReadAll(rd)
+	l1ips, err := io.ReadAll(rd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read l1 discovery response: %w", err)
 	}
@@ -620,7 +625,9 @@ func webuiHandler(cfg config, w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		w.Write(index)
+		if _, err := w.Write(index); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 		return
 	} else if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -635,7 +642,9 @@ func configHandler(conf []byte) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		w.Write(conf)
+		if _, err := w.Write(conf); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}
 }
 
@@ -685,7 +694,7 @@ func createAndPersistL2Id(root string) (uuid.UUID, error) {
 	path := idFilePath(root)
 	_ = os.Remove(path)
 	l2Id := uuid.New()
-	if err := ioutil.WriteFile(path, []byte(l2Id.String()), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(l2Id.String()), 0644); err != nil {
 		return uuid.UUID{}, err
 	}
 	return l2Id, nil
@@ -699,7 +708,7 @@ func readL2IdIfExists(root string) (uuid.UUID, error) {
 		return uuid.UUID{}, err
 	}
 
-	bz, err := ioutil.ReadFile(path)
+	bz, err := os.ReadFile(path)
 	if err != nil {
 		return uuid.UUID{}, err
 	}

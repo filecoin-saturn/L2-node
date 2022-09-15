@@ -22,7 +22,10 @@ func TestL1Discovery(t *testing.T) {
 		ips := []string{ip1, ip2, ip3}
 		bz, _ := json.Marshal(ips)
 
-		w.Write(bz)
+		_, err := w.Write(bz)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 
 	cfg := config{
@@ -42,7 +45,9 @@ func TestL1Discovery(t *testing.T) {
 
 func TestL1DiscoveryFailure(t *testing.T) {
 	svc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("failure"))
+		if _, err := w.Write([]byte("failure")); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 
 	cfg := config{
