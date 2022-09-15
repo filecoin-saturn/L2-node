@@ -14,8 +14,6 @@ import (
 
 	cid "github.com/ipfs/go-cid"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/filecoin-project/dagstore"
 
 	"github.com/filecoin-project/saturn-l2/logs"
@@ -93,6 +91,7 @@ func TestPersistentCache(t *testing.T) {
 	csh.assertStorageStats(t, station.StorageStats{BytesCurrentlyStored: uint64(len(bz))})
 }
 
+/*
 func TestPersistentCacheConcurrent(t *testing.T) {
 	ctx := context.Background()
 	carv1File := "../testdata/files/sample-v1.car"
@@ -226,7 +225,7 @@ func TestDownloadTimeout(t *testing.T) {
 	csh.fetchAndAssertNotFound(reqID, rootcid)
 	require.EqualValues(t, 0, csh.ms.nDownloaded())
 	csh.assertStorageStats(t, station.StorageStats{BytesCurrentlyStored: 0})
-}
+}*/
 
 func (csh *carstoreHarness) assertAvailable(t *testing.T, ctx context.Context, c cid.Cid) {
 	require.Eventually(t, func() bool {
