@@ -76,7 +76,7 @@ func (s *StationAPIImpl) createOrUpdateReqStatsUnlocked(ctx context.Context, cre
 	if err == datastore.ErrNotFound {
 		stats := station.ReqStats{}
 		createFn(&stats)
-		bz, err = json.Marshal(stats)
+		bz, err := json.Marshal(stats)
 		if err != nil {
 			return fmt.Errorf("failed to marshal retrieval stats to json: %w", err)
 		}
