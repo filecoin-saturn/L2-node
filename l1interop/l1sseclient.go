@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"sync"
 	"time"
@@ -273,7 +272,7 @@ func (l *l1SseClient) sendCarResponse(ctx context.Context, l1Addr string, dr *ty
 	_ = prd.Close()
 
 	lr := io.LimitReader(resp.Body, maxPostResponseSize)
-	_, _ = io.Copy(ioutil.Discard, lr)
+	_, _ = io.Copy(io.Discard, lr)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("got status code %d from L1 for POST url %s , expected %d", resp.StatusCode, respUrl, http.StatusOK)

@@ -2,7 +2,8 @@ package carstore
 
 import (
 	"context"
-	"io/ioutil"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,7 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var root = "QmfMYyn8LUWEfRXfijKFjBAshSsPVRUgwLZzsD7kcTtX1A"
+var (
+	defaultURL = "https://ipfs.io/api/v0/dag/export" // nolint
+	root       = "QmfMYyn8LUWEfRXfijKFjBAshSsPVRUgwLZzsD7kcTtX1A"
+)
 
 func TestGatewayAPI(t *testing.T) {
 	ctx := context.Background()
@@ -31,7 +35,7 @@ func TestGatewayAPI(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, rd)
 
-	out, err := ioutil.ReadAll(rd)
+	out, err := io.ReadAll(rd)
 	require.NoError(t, err)
 	require.EqualValues(t, bz, out)
 }
@@ -67,7 +71,7 @@ func TestIPFSGateway(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, rd)
 
-	bz, err := ioutil.ReadAll(rd)
+	bz, err := io.ReadAll(rd)
 	require.NoError(t, err)
 	require.NotEmpty(t, bz)
 }
@@ -88,6 +92,6 @@ func TestDownloadFailsIfTooLarge(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, rd)
 
-	_, err = ioutil.ReadAll(rd)
-	require.Error(t, ErrDownloadTooLarge)
+	_, err = io.ReadAll(rd)
+	require.True(t, errors.Is(err, ErrDownloadTooLarge))
 }

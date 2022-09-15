@@ -76,12 +76,18 @@ func (s *StationAPIImpl) createOrUpdateReqStatsUnlocked(ctx context.Context, cre
 	if err == datastore.ErrNotFound {
 		stats := station.ReqStats{}
 		createFn(&stats)
-		bz, err := json.Marshal(stats)
+		bz, err = json.Marshal(stats)
 		if err != nil {
 			return fmt.Errorf("failed to marshal retrieval stats to json: %w", err)
 		}
 
-		return s.ds.Put(ctx, contentReqKey, bz)
+		if err := s.ds.Put(ctx, contentReqKey, bz); err != nil {
+			return fmt.Errorf("failed to put to datastore: %w", err)
+		}
+		if err := s.ds.Sync(ctx, contentReqKey); err != nil {
+			return fmt.Errorf("failed to sync datsstore key: %w", err)
+		}
+		return nil
 	}
 	var stats station.ReqStats
 	if err := json.Unmarshal(bz, &stats); err != nil {
@@ -94,7 +100,13 @@ func (s *StationAPIImpl) createOrUpdateReqStatsUnlocked(ctx context.Context, cre
 	if err != nil {
 		return fmt.Errorf("failed to marshal retrieval stats to json: %w", err)
 	}
-	return s.ds.Put(ctx, contentReqKey, bz)
+	if err := s.ds.Put(ctx, contentReqKey, bz); err != nil {
+		return fmt.Errorf("failed to put datastore key: %w", err)
+	}
+	if err := s.ds.Sync(ctx, contentReqKey); err != nil {
+		return fmt.Errorf("failed to sync datsstore key: %w", err)
+	}
+	return nil
 }
 
 func (s *StationAPIImpl) AllStats(ctx context.Context) (station.StationStats, error) {

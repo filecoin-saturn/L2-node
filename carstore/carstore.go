@@ -291,7 +291,8 @@ func (cs *CarStore) executeCacheMiss(reqID uuid.UUID, root cid.Cid) {
 	_, found := cs.cacheMissTimeCache.Get(mhkey)
 	// add the key to our cache miss timecache no matter what
 	// if the key already exists in the timecache -> this will simply give a bump to it's longevity in the time cache
-	cs.cacheMissTimeCache.Add(mhkey, struct{}{}, cache.DefaultExpiration)
+	cs.cacheMissTimeCache.Add(mhkey, struct{}{}, cache.DefaultExpiration) // nolint:errcheck
+
 	// if this is the very first cache miss for this key, there's nothing to do here.
 	if !found {
 		cs.logger.Infow(reqID, "first cache miss for given root, not downloading it")

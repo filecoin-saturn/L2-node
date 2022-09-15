@@ -44,8 +44,7 @@ func TestPersistentCache(t *testing.T) {
 	csh := newCarStoreHarness(t, svc.URL, Config{MaxCARFilesDiskSpace: defaultMaxSize})
 	reqID := uuid.New()
 
-	csh.assertStorageStats(t, station.StorageStats{0})
-
+	csh.assertStorageStats(t, station.StorageStats{BytesCurrentlyStored: 0})
 	// first hit -> not found
 	csh.fetchAndAssertNotFound(reqID, rootcid)
 
@@ -69,13 +68,13 @@ func TestPersistentCache(t *testing.T) {
 		return err == nil && si.ShardState == dagstore.ShardStateAvailable
 	}, 50*time.Second, 200*time.Millisecond)
 
-	csh.assertStorageStats(t, station.StorageStats{uint64(len(bz))})
+	csh.assertStorageStats(t, station.StorageStats{BytesCurrentlyStored: uint64(len(bz))})
 
 	// run dagstore GC -> CAR file is removed
 	res, err := csh.cs.dagst.GC(ctx)
 	require.NoError(t, err)
 	require.Len(t, res.Shards, 1)
-	csh.assertStorageStats(t, station.StorageStats{0})
+	csh.assertStorageStats(t, station.StorageStats{BytesCurrentlyStored: 0})
 
 	// fetch car -> fails as we do not have it but will trigger a fetch again
 	csh.fetchAndAssertNotFound(reqID, rootcid)
@@ -91,7 +90,7 @@ func TestPersistentCache(t *testing.T) {
 	require.NoError(t, csh.cs.Stop())
 	require.EqualValues(t, 2*len(bz), csh.ms.nDownloaded())
 
-	csh.assertStorageStats(t, station.StorageStats{uint64(len(bz))})
+	csh.assertStorageStats(t, station.StorageStats{BytesCurrentlyStored: uint64(len(bz))})
 }
 
 func TestPersistentCacheConcurrent(t *testing.T) {
@@ -120,7 +119,7 @@ func TestPersistentCacheConcurrent(t *testing.T) {
 	require.NoError(t, errg.Wait())
 	require.EqualValues(t, len(bz), csh.ms.nDownloaded())
 
-	csh.assertStorageStats(t, station.StorageStats{uint64(len(bz))})
+	csh.assertStorageStats(t, station.StorageStats{BytesCurrentlyStored: uint64(len(bz))})
 }
 
 func TestPersistentCacheMultipleParallelRequests(t *testing.T) {
@@ -170,7 +169,7 @@ func TestPersistentCacheMultipleParallelRequests(t *testing.T) {
 	}
 	require.NoError(t, errg.Wait())
 
-	csh.assertStorageStats(t, station.StorageStats{uint64(len(bz1) + len(bz2))})
+	csh.assertStorageStats(t, station.StorageStats{BytesCurrentlyStored: uint64(len(bz1) + len(bz2))})
 	require.EqualValues(t, len(bz1)+len(bz2), csh.ms.nDownloaded())
 }
 
@@ -202,7 +201,7 @@ func TestMountFetchErrorConcurrent(t *testing.T) {
 	}
 
 	require.EqualValues(t, 0, csh.ms.nDownloaded())
-	csh.assertStorageStats(t, station.StorageStats{0})
+	csh.assertStorageStats(t, station.StorageStats{BytesCurrentlyStored: 0})
 }
 
 func TestDownloadTimeout(t *testing.T) {
@@ -226,7 +225,7 @@ func TestDownloadTimeout(t *testing.T) {
 	// still errors out
 	csh.fetchAndAssertNotFound(reqID, rootcid)
 	require.EqualValues(t, 0, csh.ms.nDownloaded())
-	csh.assertStorageStats(t, station.StorageStats{0})
+	csh.assertStorageStats(t, station.StorageStats{BytesCurrentlyStored: 0})
 }
 
 func (csh *carstoreHarness) assertAvailable(t *testing.T, ctx context.Context, c cid.Cid) {
@@ -242,7 +241,7 @@ func (csh *carstoreHarness) fetchNAsyNC(rootCid cid.Cid, n int) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			csh.cs.FetchAndWriteCAR(uuid.New(), rootCid, func(_ bstore.Blockstore) error {
+			csh.cs.FetchAndWriteCAR(uuid.New(), rootCid, func(_ bstore.Blockstore) error { // nolint: errcheck
 				return nil
 			})
 		}()

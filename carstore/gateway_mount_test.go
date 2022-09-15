@@ -2,7 +2,7 @@ package carstore
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"sync"
 	"testing"
 
@@ -40,7 +40,7 @@ func TestGatewayMount(t *testing.T) {
 	rd, err := gm2.Fetch(ctx)
 	require.NoError(t, err)
 	require.NotEmpty(t, rd)
-	out, err := ioutil.ReadAll(rd)
+	out, err := io.ReadAll(rd)
 	require.NoError(t, err)
 	require.NotEmpty(t, out)
 	require.EqualValues(t, out, bz)
