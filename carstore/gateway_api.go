@@ -94,6 +94,7 @@ func (gw *GatewayReader) Read(p []byte) (int, error) {
 }
 
 func (gw *GatewayReader) Close() error {
+	fmt.Println("\n Recoding downloaded data", gw.n)
 	if err := gw.sapi.RecordDataDownloaded(gw.ctx, gw.n); err != nil {
 		log.Errorw("failed to record download stats", "err", err)
 		return err
