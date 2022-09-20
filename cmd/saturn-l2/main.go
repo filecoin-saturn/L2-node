@@ -179,7 +179,7 @@ func main() {
 	}
 
 	logging.SetAllLoggers(logging.LevelInfo)
-	if err := logging.SetLogLevel("dagstore", "INFO"); err != nil {
+	if err := logging.SetLogLevel("dagstore", "ERROR"); err != nil {
 		panic(err)
 	}
 	// build app context
