@@ -174,7 +174,7 @@ type l1Harness struct {
 	cancelF context.CancelFunc
 
 	mu        sync.Mutex
-	l1Clients map[int]*l1SseClient
+	l1Clients map[int]*L1SseClient
 	l1s       map[int]*l1State
 
 	nL1sConnected *atomic.Uint64
@@ -266,7 +266,7 @@ func buildHarness(t *testing.T, l2Id string, nL1s int) *l1Harness {
 		t:               t,
 		expectedContent: make(map[string][]byte),
 		l1s:             make(map[int]*l1State),
-		l1Clients:       make(map[int]*l1SseClient),
+		l1Clients:       make(map[int]*L1SseClient),
 		nL1sConnected:   atomic.NewUint64(0),
 	}
 	h.expectedContent[rootcid1.String()] = bz1
