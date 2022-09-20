@@ -139,27 +139,57 @@ type config struct {
 }
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	var carserver *CARServer
+	var srv *http.Server
+	var l1wg sync.WaitGroup
+	var l1Clients []*l1interop.L1SseClient
+
+	cleanup := func() {
+		log.Info("shutting down all threads")
+		cancel()
+
+		// shut down the car server
+		if carserver != nil {
+			log.Info("shutting down the CAR server")
+			if err := carserver.Stop(ctx); err != nil {
+				log.Errorw("failed to stop car server", "err", err)
+			}
+		}
+
+		// shut down all l1 clients
+		for _, lc := range l1Clients {
+			lc := lc
+			log.Infow("closing connection with l1", "l1", lc.L1Addr)
+			lc.Stop()
+			log.Infow("finished closing connection with l1", "l1", lc.L1Addr)
+		}
+
+		// wait for all l1 connections to be torn down
+		log.Info("waiting for all l1 connections to be torn down")
+		l1wg.Wait()
+		log.Info("finished tearing down all l1 connections")
+
+		// shut down the http server
+		if srv != nil {
+			log.Info("shutting down the http server")
+			_ = srv.Close()
+		}
+		os.Exit(0)
+	}
+
 	logging.SetAllLoggers(logging.LevelInfo)
-	if err := logging.SetLogLevel("dagstore", "ERROR"); err != nil {
+	if err := logging.SetLogLevel("dagstore", "INFO"); err != nil {
 		panic(err)
 	}
 	// build app context
-	cleanup := func() {
-
-	}
-	defer cleanup()
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
+		log.Info("detected shutdown signal, will cleanup...")
 		cleanup()
 	}()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cleanup = updateCleanup(cleanup, func() {
-		log.Info("shutting down all threads")
-		cancel()
-	})
 
 	// build L2 config
 	cfg, err := mkConfig()
@@ -217,7 +247,7 @@ func main() {
 	}
 
 	// build and start the CAR server
-	carserver, err := buildCarServer(cfg, logger)
+	carserver, err = buildCarServer(cfg, logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to build car server: %s", err.Error())
 		os.Exit(2)
@@ -226,25 +256,16 @@ func main() {
 		fmt.Fprintf(os.Stderr, "failed to start car server: %s", err.Error())
 		os.Exit(2)
 	}
-	cleanup = updateCleanup(cleanup, func() {
-		log.Info("shutting down the CAR server")
-		if err := carserver.Stop(ctx); err != nil {
-			log.Errorw("failed to stop car server", "err", err)
-		}
-	})
 
 	// Connect and register with all L1s and start serving their requests
 	nConnectedL1s := atomic.NewUint64(0)
 	failedL1Ch := make(chan struct{}, len(l1IPAddrs))
-	var l1wg sync.WaitGroup
+
 	for _, l1ip := range l1IPAddrs {
 		l1ip := l1ip
 		l1client := l1interop.New(l2Id.String(), l1HttpClient, logger, carserver.server, l1ip, cfg.MaxConcurrentL1Requests)
-		cleanup = updateCleanup(cleanup, func() {
-			log.Infow("closing connection with l1", "l1", l1ip)
-			l1client.Stop()
-			log.Infow("finished closing connection with l1", "l1", l1ip)
-		})
+		l1Clients = append(l1Clients, l1client)
+
 		l1wg.Add(1)
 		go func(l1ip string) {
 			defer l1wg.Done()
@@ -259,11 +280,6 @@ func main() {
 			}
 		}(l1ip)
 	}
-	cleanup = updateCleanup(cleanup, func() {
-		log.Info("waiting for all l1 connections to be torn down")
-		l1wg.Wait()
-		log.Info("finished tearing down all l1 connections")
-	})
 
 	// if we fail to connect to any of the L1s after exhausting all retries; error out and exit.
 	go func() {
@@ -305,13 +321,9 @@ func main() {
 		}
 	}))
 
-	srv := &http.Server{
+	srv = &http.Server{
 		Handler: m,
 	}
-	cleanup = updateCleanup(cleanup, func() {
-		log.Info("shutting down the http server")
-		_ = srv.Close()
-	})
 
 	nl, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", cfg.Port))
 	if err != nil {
@@ -367,13 +379,6 @@ func logL1Connectivity(ctx context.Context, nConnectedL1s *atomic.Uint64) {
 		case <-ctx.Done():
 			return
 		}
-	}
-}
-
-func updateCleanup(oldFunc func(), newFunc func()) func() {
-	return func() {
-		oldFunc()
-		newFunc()
 	}
 }
 

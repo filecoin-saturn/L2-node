@@ -114,8 +114,8 @@ github.com/envoyproxy/go-control-plane v0.9.1-0.20191026205805-5f8ba28d4473/go.m
 github.com/envoyproxy/go-control-plane v0.9.4/go.mod h1:6rpuAdCZL397s3pYoYcLgu1mIlRU8Am5FuJP05cCM98=
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
-github.com/filecoin-project/dagstore v0.5.3-0.20220718102032-40704514c0c0 h1:UFdvWqz0SeH0Z+ae6qGdGH8b+LPqaBfIS2UMHD0ZVhY=
-github.com/filecoin-project/dagstore v0.5.3-0.20220718102032-40704514c0c0/go.mod h1:AIh49K94YHHrJZsHD9Puza4VciBmvG+Y9jqZtE4ie8Y=
+github.com/filecoin-project/dagstore v0.5.3-0.20220920122009-a359291f19ff h1:m1+NsnqCJg4KKaJ0Zkq81B8oFsk8m9CPIeu9AVzb0+A=
+github.com/filecoin-project/dagstore v0.5.3-0.20220920122009-a359291f19ff/go.mod h1:AIh49K94YHHrJZsHD9Puza4VciBmvG+Y9jqZtE4ie8Y=
 github.com/filecoin-project/go-address v1.0.0 h1:IrexI0kpADLaPP+CdmU3CVAUqnW/FQC0KTmz4lVKiFU=
 github.com/filecoin-project/go-address v1.0.0/go.mod h1:5t3z6qPmIADZBtuE9EIzi0EwzcRy2nVhpo0I/c1r0OA=
 github.com/filecoin-project/go-crypto v0.0.0-20191218222705-effae4ea9f03 h1:2pMXdBnCiXjfCYx/hLqFxccPoqsSveQFxVLvNxy9bus=

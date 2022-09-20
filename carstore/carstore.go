@@ -120,7 +120,8 @@ func New(rootDir string, gwAPI GatewayAPI, cfg Config, logger *logs.SaturnLogger
 		TopLevelIndex:             topIndex,
 		MaxConcurrentIndex:        maxConcurrentIndex,
 		MaxConcurrentReadyFetches: maxConcurrentReadyFetches,
-		RecoverOnStart:            dagstore.DoNotRecover,
+		RecoverOnStart:            dagstore.RecoverOnAcquire,
+		FetchOnStart:              dagstore.FetchOnAcquire,
 		AutomatedGCEnabled:        true,
 		AutomatedGCConfig: &dagstore.AutomatedGCConfig{
 			GarbeCollectionStrategy:   gc.NewLRUGarbageCollector(),
@@ -172,6 +173,7 @@ func (cs *CarStore) Start(ctx context.Context) error {
 	if err == nil {
 		log.Info("successfully started car store")
 	}
+
 	return err
 }
 
@@ -190,7 +192,8 @@ func (cs *CarStore) traceLoop() {
 			log.Debugw("trace",
 				"shard-key", tr.Key.String(),
 				"op-type", tr.Op.String(),
-				"after", tr.After.String())
+				"after", tr.After.String(),
+				"disk-size", tr.TransientDirSizeCounter)
 
 		case <-cs.ctx.Done():
 			return
@@ -213,14 +216,14 @@ func (cs *CarStore) gcTraceLoop() {
 
 func (cs *CarStore) Stop() error {
 	log.Info("shutting down the carstore")
-	// Cancel the context
-	cs.cancel()
-
 	// Close the DAG store
 	if err := cs.dagst.Close(); err != nil {
 		return fmt.Errorf("failed to close the dagstore: %w", err)
 	}
 	log.Info("dagstore closed")
+
+	// Cancel the context
+	cs.cancel()
 
 	// Wait for the background go routine to exit
 	log.Info("waiting for carstore background goroutines to exit")
