@@ -5,8 +5,8 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -17,7 +17,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/ipfs/go-cid"
+	cid "github.com/ipfs/go-cid"
 
 	"github.com/filecoin-project/saturn-l2/carstore"
 
@@ -174,7 +174,7 @@ type l1Harness struct {
 	cancelF context.CancelFunc
 
 	mu        sync.Mutex
-	l1Clients map[int]*l1SseClient
+	l1Clients map[int]*L1SseClient
 	l1s       map[int]*l1State
 
 	nL1sConnected *atomic.Uint64
@@ -188,7 +188,7 @@ func (h *l1Harness) Start() {
 
 	for _, l1Client := range h.l1Clients {
 		l1Client := l1Client
-		go l1Client.Start(h.nL1sConnected)
+		go l1Client.Start(h.nL1sConnected) // nolint
 	}
 }
 
@@ -266,7 +266,7 @@ func buildHarness(t *testing.T, l2Id string, nL1s int) *l1Harness {
 		t:               t,
 		expectedContent: make(map[string][]byte),
 		l1s:             make(map[int]*l1State),
-		l1Clients:       make(map[int]*l1SseClient),
+		l1Clients:       make(map[int]*L1SseClient),
 		nL1sConnected:   atomic.NewUint64(0),
 	}
 	h.expectedContent[rootcid1.String()] = bz1
@@ -288,7 +288,7 @@ func buildHarness(t *testing.T, l2Id string, nL1s int) *l1Harness {
 			vs := r.URL.Query()
 			requestId := vs.Get("requestId")
 
-			bz, err := ioutil.ReadAll(r.Body)
+			bz, err := io.ReadAll(r.Body)
 			if err != nil {
 				return
 			}
@@ -312,8 +312,14 @@ func buildHarness(t *testing.T, l2Id string, nL1s int) *l1Harness {
 					if err != nil {
 						return
 					}
-					w.Write(bz)
-					w.Write([]byte("\n"))
+					if _, err := w.Write(bz); err != nil {
+						fmt.Println("ERROR when writing to L2", err.Error())
+						return
+					}
+					if _, err := w.Write([]byte("\n")); err != nil {
+						fmt.Println("ERROR when writing to L2", err.Error())
+						return
+					}
 					if f, ok := w.(http.Flusher); ok {
 						f.Flush()
 					}
@@ -360,6 +366,8 @@ func (mc *mockCarServer) ServeCARFile(ctx context.Context, dr *types.DagTraversa
 	if !ok {
 		return carstore.ErrNotFound
 	}
-	w.Write(bz)
+	if _, err := w.Write(bz); err != nil {
+		return err
+	}
 	return nil
 }

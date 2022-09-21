@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	car "github.com/ipld/go-car/v2"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
@@ -43,9 +44,7 @@ func GetTestServerFor(t *testing.T, ctx context.Context, path string) (cid.Cid, 
 
 func GetTestHangingServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		for {
-
-		}
+		time.Sleep(24 * time.Hour)
 	}))
 }
 
@@ -62,19 +61,25 @@ func GetTestServerForRoots(t *testing.T, out map[string][]byte) *httptest.Server
 			http.Error(w, "invalid arg", http.StatusBadRequest)
 			return
 		}
-		w.Write(bz)
+		_, err := w.Write(bz)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 }
 
 func GetTestServer(t *testing.T, root string, out []byte) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(1 * time.Second)
 		q := r.URL.Query()
 		v := q.Get("arg")
 		if len(v) == 0 || v != root {
 			http.Error(w, "invalid arg", http.StatusBadRequest)
 			return
 		}
-		w.Write(out)
+		if _, err := w.Write(out); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 }
 

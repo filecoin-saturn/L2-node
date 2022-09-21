@@ -167,6 +167,7 @@ Response:
 "TotalBytesUploaded":0,   -> Total number of bytes uploaded/served by the L2 node to requesting peers in it's entire lifetime.
 "TotalBytesDownloaded":0, -> Total number of bytes downloaded by the L2 node from the IPFS Gateway/origin server in it's entire lifetime.
 "NContentRequests":0,     -> Total number of requests received by the L2 node for content from clients in it's entire lifetime.
+"NContentNotFoundReqs":0, -> Total number of requests for which the L2 did NOT have a cached CAR file to serve.
 "NSuccessfulRetrievals":0 -> Total number of successful retrievals served by the L2 node.
 "NContentReqErrors":0}    -> Total number of errors encountered by the L2 node while serving content to client in it's entire lifetime.
 ```

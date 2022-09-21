@@ -36,24 +36,22 @@ func (s *StationAPIImpl) SetStorageStatsFetcher(ss station.StorageStatsFetcher) 
 	s.ss = ss
 }
 
-func (s *StationAPIImpl) RecordRetrievalServed(ctx context.Context, bytesServed, nErrors uint64) error {
+func (s *StationAPIImpl) RecordRetrievalServed(ctx context.Context, bytesServed, nErrors, nNotFound, nSuccess uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	return s.createOrUpdateReqStatsUnlocked(ctx, func(r *station.ReqStats) {
 		r.TotalBytesUploaded = bytesServed
 		r.NContentRequests = 1
-		if nErrors == 0 {
-			r.NSuccessfulRetrievals = 1
-		}
+		r.NContentNotFoundReqs = nNotFound
 		r.NContentReqErrors = nErrors
+		r.NSuccessfulRetrievals = nSuccess
 	}, func(r *station.ReqStats) {
 		r.TotalBytesUploaded += bytesServed
 		r.NContentRequests += 1
-		if nErrors == 0 {
-			r.NSuccessfulRetrievals += 1
-		}
+		r.NContentNotFoundReqs += nNotFound
 		r.NContentReqErrors += nErrors
+		r.NSuccessfulRetrievals += nSuccess
 	})
 }
 
@@ -83,7 +81,13 @@ func (s *StationAPIImpl) createOrUpdateReqStatsUnlocked(ctx context.Context, cre
 			return fmt.Errorf("failed to marshal retrieval stats to json: %w", err)
 		}
 
-		return s.ds.Put(ctx, contentReqKey, bz)
+		if err := s.ds.Put(ctx, contentReqKey, bz); err != nil {
+			return fmt.Errorf("failed to put to datastore: %w", err)
+		}
+		if err := s.ds.Sync(ctx, contentReqKey); err != nil {
+			return fmt.Errorf("failed to sync datsstore key: %w", err)
+		}
+		return nil
 	}
 	var stats station.ReqStats
 	if err := json.Unmarshal(bz, &stats); err != nil {
@@ -96,7 +100,13 @@ func (s *StationAPIImpl) createOrUpdateReqStatsUnlocked(ctx context.Context, cre
 	if err != nil {
 		return fmt.Errorf("failed to marshal retrieval stats to json: %w", err)
 	}
-	return s.ds.Put(ctx, contentReqKey, bz)
+	if err := s.ds.Put(ctx, contentReqKey, bz); err != nil {
+		return fmt.Errorf("failed to put datastore key: %w", err)
+	}
+	if err := s.ds.Sync(ctx, contentReqKey); err != nil {
+		return fmt.Errorf("failed to sync datsstore key: %w", err)
+	}
+	return nil
 }
 
 func (s *StationAPIImpl) AllStats(ctx context.Context) (station.StationStats, error) {

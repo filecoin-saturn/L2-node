@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -122,6 +121,8 @@ var (
 	maxL1DiscoveryAttempts = float64(10)
 	maxL1DiscoveryBackoff  = 60 * time.Second
 	minL1DiscoveryBackoff  = 2 * time.Second
+
+	maxDownloadPerRequest = uint64(2147483648) // 2 Gib
 )
 
 type config struct {
@@ -134,27 +135,61 @@ type config struct {
 	MaxConcurrentL1Requests int
 	UseTestL1IPAddrs        bool
 	TestL1IPAddr            L1IPAddrs
+	MaxDownloadPerRequest   uint64
 }
 
 func main() {
-	// build app context
-	cleanup := func() {
+	ctx, cancel := context.WithCancel(context.Background())
+	var carserver *CARServer
+	var srv *http.Server
+	var l1wg sync.WaitGroup
+	var l1Clients []*l1interop.L1SseClient
 
+	cleanup := func() {
+		log.Info("shutting down all threads")
+		cancel()
+
+		// shut down the car server
+		if carserver != nil {
+			log.Info("shutting down the CAR server")
+			if err := carserver.Stop(ctx); err != nil {
+				log.Errorw("failed to stop car server", "err", err)
+			}
+		}
+
+		// shut down all l1 clients
+		for _, lc := range l1Clients {
+			lc := lc
+			log.Infow("closing connection with l1", "l1", lc.L1Addr)
+			lc.Stop()
+			log.Infow("finished closing connection with l1", "l1", lc.L1Addr)
+		}
+
+		// wait for all l1 connections to be torn down
+		log.Info("waiting for all l1 connections to be torn down")
+		l1wg.Wait()
+		log.Info("finished tearing down all l1 connections")
+
+		// shut down the http server
+		if srv != nil {
+			log.Info("shutting down the http server")
+			_ = srv.Close()
+		}
+		os.Exit(0)
 	}
-	defer cleanup()
-	c := make(chan os.Signal)
+
+	logging.SetAllLoggers(logging.LevelInfo)
+	if err := logging.SetLogLevel("dagstore", "ERROR"); err != nil {
+		panic(err)
+	}
+	// build app context
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
+		log.Info("detected shutdown signal, will cleanup...")
 		cleanup()
 	}()
-
-	logging.SetAllLoggers(logging.LevelInfo)
-	ctx, cancel := context.WithCancel(context.Background())
-	cleanup = updateCleanup(cleanup, func() {
-		log.Info("shutting down all threads")
-		cancel()
-	})
 
 	// build L2 config
 	cfg, err := mkConfig()
@@ -188,13 +223,14 @@ func main() {
 	if cfg.UseTestL1IPAddrs {
 		l1IPAddrs = cfg.TestL1IPAddr
 	} else {
-		l1IPAddrs, err = getNearestL1sWithRetry(ctx, cfg)
+		l1IPAddrs, err = getNearestL1sWithRetry(ctx, cfg, maxL1DiscoveryAttempts)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to get nearest L1s to connect to: %s\n", err.Error())
 			os.Exit(2)
 		}
 	}
 	log.Infow("discovered L1s", "l1 IP Addrs", strings.Join(l1IPAddrs, ", "))
+	fmt.Println("INFO: Saturn Node was able to connect to the Orchestrator and will now start connecting to the Saturn network...")
 
 	// build the saturn logger
 	logger := logs.NewSaturnLogger()
@@ -211,7 +247,7 @@ func main() {
 	}
 
 	// build and start the CAR server
-	carserver, err := buildCarServer(cfg, logger)
+	carserver, err = buildCarServer(cfg, logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to build car server: %s", err.Error())
 		os.Exit(2)
@@ -220,23 +256,16 @@ func main() {
 		fmt.Fprintf(os.Stderr, "failed to start car server: %s", err.Error())
 		os.Exit(2)
 	}
-	cleanup = updateCleanup(cleanup, func() {
-		log.Info("shutting down the CAR server")
-		carserver.Stop(ctx)
-	})
 
 	// Connect and register with all L1s and start serving their requests
 	nConnectedL1s := atomic.NewUint64(0)
 	failedL1Ch := make(chan struct{}, len(l1IPAddrs))
-	var l1wg sync.WaitGroup
+
 	for _, l1ip := range l1IPAddrs {
 		l1ip := l1ip
 		l1client := l1interop.New(l2Id.String(), l1HttpClient, logger, carserver.server, l1ip, cfg.MaxConcurrentL1Requests)
-		cleanup = updateCleanup(cleanup, func() {
-			log.Infow("closing connection with l1", "l1", l1ip)
-			l1client.Stop()
-			log.Infow("finished closing connection with l1", "l1", l1ip)
-		})
+		l1Clients = append(l1Clients, l1client)
+
 		l1wg.Add(1)
 		go func(l1ip string) {
 			defer l1wg.Done()
@@ -251,11 +280,6 @@ func main() {
 			}
 		}(l1ip)
 	}
-	cleanup = updateCleanup(cleanup, func() {
-		log.Info("waiting for all l1 connections to be torn down")
-		l1wg.Wait()
-		log.Info("finished tearing down all l1 connections")
-	})
 
 	// if we fail to connect to any of the L1s after exhausting all retries; error out and exit.
 	go func() {
@@ -292,16 +316,14 @@ func main() {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write(bz)
+		if _, err := w.Write(bz); err != nil {
+			http.Error(w, "failed to write stats to response", http.StatusInternalServerError)
+		}
 	}))
 
-	srv := &http.Server{
+	srv = &http.Server{
 		Handler: m,
 	}
-	cleanup = updateCleanup(cleanup, func() {
-		log.Info("shutting down the http server")
-		_ = srv.Close()
-	})
 
 	nl, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", cfg.Port))
 	if err != nil {
@@ -325,6 +347,20 @@ func logL1Connectivity(ctx context.Context, nConnectedL1s *atomic.Uint64) {
 
 	lastNConnected := uint64(0)
 
+	// get to the first connectivity event as fast as possible
+	go func() {
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			nConnected := nConnectedL1s.Load()
+			if nConnected != 0 {
+				fmt.Printf("INFO: Saturn Node is online and connected to %d peers\n", nConnected)
+				return
+			}
+		}
+	}()
+
 	for {
 		select {
 		case <-ticker.C:
@@ -335,7 +371,7 @@ func logL1Connectivity(ctx context.Context, nConnectedL1s *atomic.Uint64) {
 				fmt.Print("ERROR: Saturn Node is not able to connect to the network\n")
 			} else {
 				if nConnected != lastNConnected {
-					fmt.Printf("Saturn Node is online and connected to %d peers\n", nConnected)
+					fmt.Printf("INFO: Saturn Node is online and connected to %d peers\n", nConnected)
 				}
 			}
 
@@ -343,13 +379,6 @@ func logL1Connectivity(ctx context.Context, nConnectedL1s *atomic.Uint64) {
 		case <-ctx.Done():
 			return
 		}
-	}
-}
-
-func updateCleanup(oldFunc func(), newFunc func()) func() {
-	return func() {
-		oldFunc()
-		newFunc()
 	}
 }
 
@@ -442,6 +471,7 @@ func mkConfig() (config, error) {
 		MaxConcurrentL1Requests: int(maxConcurrentL1Reqs),
 		UseTestL1IPAddrs:        useL1IPAddrs,
 		TestL1IPAddr:            l1IPAddrs,
+		MaxDownloadPerRequest:   uint64(maxDownloadPerRequest),
 	}, nil
 }
 
@@ -460,13 +490,15 @@ func parseL1IPs(l1IPsStr string) (L1IPAddrs, error) {
 	return l1IPAddrs, nil
 }
 
-func getNearestL1sWithRetry(ctx context.Context, cfg config) (L1IPAddrs, error) {
+func getNearestL1sWithRetry(ctx context.Context, cfg config, maxL1DiscoveryAttempts float64) (L1IPAddrs, error) {
 	backoff := &backoff.Backoff{
 		Min:    minL1DiscoveryBackoff,
 		Max:    maxL1DiscoveryBackoff,
 		Factor: 2,
 		Jitter: true,
 	}
+
+	fmt.Println("INFO: Saturn Node will try to connect to the Saturn Orchestrator...")
 
 	for {
 		l1Addrs, err := getNearestL1s(ctx, cfg)
@@ -481,6 +513,7 @@ func getNearestL1sWithRetry(ctx context.Context, cfg config) (L1IPAddrs, error) 
 		}
 
 		log.Errorw("failed to get L1s from orchestrator; will retry", "err", err)
+		fmt.Println("INFO: Saturn Node is unable to connect to the Orchestrator, retrying....")
 
 		// backoff and wait before making a new request to the orchestrator.
 		duration := backoff.Duration()
@@ -514,7 +547,7 @@ func getNearestL1s(ctx context.Context, cfg config) (L1IPAddrs, error) {
 	defer resp.Body.Close()
 
 	rd := io.LimitReader(resp.Body, maxL1DiscoveryResponseSize)
-	l1ips, err := ioutil.ReadAll(rd)
+	l1ips, err := io.ReadAll(rd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read l1 discovery response: %w", err)
 	}
@@ -558,7 +591,7 @@ func buildCarServer(cfg config, logger *logs.SaturnLogger) (*CARServer, error) {
 	}
 
 	sapi := carserver.NewStationAPIImpl(dss, nil)
-	gwApi := carstore.NewGatewayAPI(gateway_base_url, sapi)
+	gwApi := carstore.NewGatewayAPI(gateway_base_url, sapi, cfg.MaxDownloadPerRequest)
 	carStoreConfig := carstore.Config{
 		MaxCARFilesDiskSpace: int64(cfg.MaxDiskSpace),
 	}
@@ -597,7 +630,9 @@ func webuiHandler(cfg config, w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		w.Write(index)
+		if _, err := w.Write(index); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 		return
 	} else if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -612,7 +647,9 @@ func configHandler(conf []byte) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		w.Write(conf)
+		if _, err := w.Write(conf); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}
 }
 
@@ -662,7 +699,7 @@ func createAndPersistL2Id(root string) (uuid.UUID, error) {
 	path := idFilePath(root)
 	_ = os.Remove(path)
 	l2Id := uuid.New()
-	if err := ioutil.WriteFile(path, []byte(l2Id.String()), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(l2Id.String()), 0644); err != nil {
 		return uuid.UUID{}, err
 	}
 	return l2Id, nil
@@ -676,7 +713,7 @@ func readL2IdIfExists(root string) (uuid.UUID, error) {
 		return uuid.UUID{}, err
 	}
 
-	bz, err := ioutil.ReadFile(path)
+	bz, err := os.ReadFile(path)
 	if err != nil {
 		return uuid.UUID{}, err
 	}

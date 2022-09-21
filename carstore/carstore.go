@@ -121,6 +121,7 @@ func New(rootDir string, gwAPI GatewayAPI, cfg Config, logger *logs.SaturnLogger
 		MaxConcurrentIndex:        maxConcurrentIndex,
 		MaxConcurrentReadyFetches: maxConcurrentReadyFetches,
 		RecoverOnStart:            dagstore.RecoverOnAcquire,
+		FetchOnStart:              dagstore.FetchOnAcquire,
 		AutomatedGCEnabled:        true,
 		AutomatedGCConfig: &dagstore.AutomatedGCConfig{
 			GarbeCollectionStrategy:   gc.NewLRUGarbageCollector(),
@@ -172,6 +173,7 @@ func (cs *CarStore) Start(ctx context.Context) error {
 	if err == nil {
 		log.Info("successfully started car store")
 	}
+
 	return err
 }
 
@@ -190,7 +192,8 @@ func (cs *CarStore) traceLoop() {
 			log.Debugw("trace",
 				"shard-key", tr.Key.String(),
 				"op-type", tr.Op.String(),
-				"after", tr.After.String())
+				"after", tr.After.String(),
+				"disk-size", tr.TransientDirSizeCounter)
 
 		case <-cs.ctx.Done():
 			return
@@ -213,14 +216,14 @@ func (cs *CarStore) gcTraceLoop() {
 
 func (cs *CarStore) Stop() error {
 	log.Info("shutting down the carstore")
-	// Cancel the context
-	cs.cancel()
-
 	// Close the DAG store
 	if err := cs.dagst.Close(); err != nil {
 		return fmt.Errorf("failed to close the dagstore: %w", err)
 	}
 	log.Info("dagstore closed")
+
+	// Cancel the context
+	cs.cancel()
 
 	// Wait for the background go routine to exit
 	log.Info("waiting for carstore background goroutines to exit")
@@ -291,7 +294,8 @@ func (cs *CarStore) executeCacheMiss(reqID uuid.UUID, root cid.Cid) {
 	_, found := cs.cacheMissTimeCache.Get(mhkey)
 	// add the key to our cache miss timecache no matter what
 	// if the key already exists in the timecache -> this will simply give a bump to it's longevity in the time cache
-	cs.cacheMissTimeCache.Add(mhkey, struct{}{}, cache.DefaultExpiration)
+	cs.cacheMissTimeCache.Add(mhkey, struct{}{}, cache.DefaultExpiration) // nolint:errcheck
+
 	// if this is the very first cache miss for this key, there's nothing to do here.
 	if !found {
 		cs.logger.Infow(reqID, "first cache miss for given root, not downloading it")

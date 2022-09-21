@@ -2,7 +2,7 @@ package carstore
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	"sync"
 	"testing"
 
@@ -20,7 +20,7 @@ func TestGatewayMount(t *testing.T) {
 	svc := testutils.GetTestServer(t, root, bz)
 	defer svc.Close()
 
-	gwAPI := NewGatewayAPI(svc.URL, &mockStationAPI{})
+	gwAPI := NewGatewayAPI(svc.URL, &mockStationAPI{}, 10000)
 	ctx := context.Background()
 	c, err := cid.Decode(root)
 	require.NoError(t, err)
@@ -40,7 +40,7 @@ func TestGatewayMount(t *testing.T) {
 	rd, err := gm2.Fetch(ctx)
 	require.NoError(t, err)
 	require.NotEmpty(t, rd)
-	out, err := ioutil.ReadAll(rd)
+	out, err := io.ReadAll(rd)
 	require.NoError(t, err)
 	require.NotEmpty(t, out)
 	require.EqualValues(t, out, bz)
