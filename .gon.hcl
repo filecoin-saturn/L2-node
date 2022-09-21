@@ -2,7 +2,7 @@ source = ["./dist/macos_darwin_amd64_v1/L2-node"]
 bundle_id = "saturn.filecoin.l2-node"
 
 apple_id {
-  username = "@env:AC_USERNAME"
+  username = "oli@protocol.ai"
   password = "@env:AC_PASSWORD"
 }
 
