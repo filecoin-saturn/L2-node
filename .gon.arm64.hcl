@@ -1,4 +1,4 @@
-source = ["./dist/macos_darwin_arm64/L2-node"]
+source = ["./dist/macos-arm64_darwin_arm64/L2-node"]
 bundle_id = "saturn.filecoin.l2-node"
 
 apple_id {
