@@ -34,6 +34,8 @@ archives:
     replacements:
       darwin: macos
       amd64: x86_64
+    builds:
+    - macos
 
 checksum:
   disable: true
