@@ -28,6 +28,12 @@ builds:
     main: ./cmd/saturn-l2
 
 archives:
+  - replacements:
+      linux: Linux
+      windows: Windows
+      386: i386
+    builds:
+    - saturn
   - id: macos-zip
     format: zip
     name_template: "{{ .ProjectName }}_{{ .Os }}"
@@ -38,7 +44,7 @@ archives:
     - macos
 
 checksum:
-  disable: true
+  name_template: 'checksums.txt'
 
 signs:
   - ids:
