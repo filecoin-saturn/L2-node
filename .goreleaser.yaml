@@ -51,5 +51,4 @@ release:
   ids:
     - none
   extra_files:
-    - glob: ./dist/gon_macos.dmg
     - glob: ./dist/gon_macos.zip

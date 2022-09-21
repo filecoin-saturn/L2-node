@@ -13,8 +13,3 @@ sign {
 zip {
   output_path="./dist/L2-node_macos.zip"
 }
-
-dmg {
-  output_path="./dist/L2-node_macos.dmg"
-  volume_name="saturn-L2-node"
-}
