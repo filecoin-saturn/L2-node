@@ -93,9 +93,3 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
-
-release:
-  ids:
-    - none
-  extra_files:
-    - glob: ./dist/gon_macos.zip
