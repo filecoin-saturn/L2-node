@@ -36,39 +36,41 @@ builds:
     main: ./cmd/saturn-l2
 
 archives:
-  - name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+  - builds:
+    - saturn
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     replacements:
       linux: Linux
       windows: Windows
       386: i386
       amd64: x86_64
-    builds:
-    - saturn
-  - id: macos-amd64-zip
+  - builds:
+    - macos-amd64
+    id: macos-amd64-zip
     format: zip
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     replacements:
       darwin: Darwin
       amd64: x86_64
-    builds:
-    - macos-amd64
-  - id: macos-arm64-zip
+  - builds:
+    - macos-arm64
+    id: macos-arm64-zip
     format: zip
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     replacements:
       darwin: Darwin
-    builds:
-    - macos-arm64
 checksum:
   name_template: 'checksums.txt'
 signs:
-  - ids:
+  - id: macos-amd64
+    ids:
       - macos-amd64-zip
     cmd: gon
     args:
       - .gon.x86_64.hcl
     artifacts: all
-  - ids:
+  - id: macos-arm64
+    ids:
       - macos-arm64-zip
     cmd: gon
     args:
