@@ -1,17 +1,26 @@
-env:
-  - GO111MODULE=on
-
+# This is an example .goreleaser.yml file with some sensible defaults.
+# Make sure to check the documentation at https://goreleaser.com
 before:
   hooks:
     # You may remove this if you don't use go modules.
     - go mod tidy
     # you may remove this if you don't need go generate
     - go generate ./...
-
 builds:
-  - id: macos
-    env:
+  - env:
       - CGO_ENABLED=0
+    id: saturn
+    goos:
+      - linux
+      - windows
+    ignore:
+    - goos: windows
+      goarch: arm64
+    main: ./cmd/saturn-l2
+    binary: saturn-L2-node
+  - env:
+      - CGO_ENABLED=0
+    id: macos
     goos:
       - darwin
     goarch:
@@ -30,8 +39,7 @@ checksum:
   disable: true
 
 signs:
-  - signature: "${artifact}_macos.dmg"
-    ids:
+  - ids:
       - macos-zip
     cmd: gon
     args:
