@@ -69,13 +69,13 @@ signs:
     args:
       - .gon.x86_64.hcl
     artifacts: all
-  - id: macos-arm64
-    ids:
-      - macos-arm64-zip
-    cmd: gon
-    args:
-      - .gon.arm64.hcl
-    artifacts: all
+  # - id: macos-arm64
+  #   ids:
+  #     - macos-arm64-zip
+  #   cmd: gon
+  #   args:
+  #     - .gon.arm64.hcl
+  #   artifacts: all
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
 changelog:
