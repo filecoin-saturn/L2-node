@@ -11,5 +11,5 @@ sign {
 }
 
 zip {
-  output_path="./dist/L2-node_macos.zip"
+  output_path="./dist/L2-node_macos.tar.gz"
 }
