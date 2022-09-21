@@ -42,10 +42,8 @@ archives:
       amd64: x86_64
     builds:
     - macos
-
 checksum:
   name_template: 'checksums.txt'
-
 signs:
   - ids:
       - macos-zip
@@ -53,10 +51,8 @@ signs:
     args:
       - .gon.hcl
     artifacts: all
-
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
-
 changelog:
   sort: asc
   groups:
@@ -70,7 +66,8 @@ changelog:
       order: 999
   filters:
     exclude:
-      - 'README'
+      - '^docs:'
+      - '^test:'
 
 release:
   ids:
