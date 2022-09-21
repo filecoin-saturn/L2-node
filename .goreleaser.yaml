@@ -23,8 +23,6 @@ builds:
     id: macos
     goos:
       - darwin
-    goarch:
-      - amd64
     main: ./cmd/saturn-l2
 
 archives:
