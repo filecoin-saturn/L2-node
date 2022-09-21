@@ -7,9 +7,9 @@ before:
     # you may remove this if you don't need go generate
     - go generate ./...
 builds:
-  - env:
+  - id: saturn
+    env:
       - CGO_ENABLED=0
-    id: saturn
     goos:
       - linux
       - windows
@@ -18,11 +18,21 @@ builds:
       goarch: arm64
     main: ./cmd/saturn-l2
     binary: saturn-L2-node
-  - env:
+  - id: macos-amd64
+    env:
       - CGO_ENABLED=0
-    id: macos
     goos:
       - darwin
+    goarch:
+      - amd64
+    main: ./cmd/saturn-l2
+  - id: macos-arm64
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - arm64
     main: ./cmd/saturn-l2
 
 archives:
@@ -34,23 +44,35 @@ archives:
       amd64: x86_64
     builds:
     - saturn
-  - id: macos-zip
-    # apple signs zip,dmg,pkg but not tar.gz
+  - id: macos-amd64-zip
     format: zip
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     replacements:
       darwin: Darwin
       amd64: x86_64
     builds:
-    - macos
+    - macos-amd64
+  - id: macos-arm64-zip
+    format: zip
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    replacements:
+      darwin: Darwin
+    builds:
+    - macos-arm64
 checksum:
   name_template: 'checksums.txt'
 signs:
   - ids:
-      - macos-zip
+      - macos-amd64-zip
     cmd: gon
     args:
-      - .gon.hcl
+      - .gon.x86_64.hcl
+    artifacts: all
+  - ids:
+      - macos-arm64-zip
+    cmd: gon
+    args:
+      - .gon.arm64.hcl
     artifacts: all
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
