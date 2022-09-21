@@ -11,5 +11,5 @@ sign {
 }
 
 zip {
-  output_path="./dist/L2-node_macos_x86_64.zip"
+  output_path="./dist/L2-node_Darwin_x86_64.zip"
 }

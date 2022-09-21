@@ -40,7 +40,7 @@ archives:
     format: zip
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     replacements:
-      darwin: macos
+      darwin: Darwin
       amd64: x86_64
     builds:
     - macos
