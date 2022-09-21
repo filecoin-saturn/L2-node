@@ -18,7 +18,7 @@ builds:
       goarch: arm64
     main: ./cmd/saturn-l2
     binary: saturn-L2-node
-  - id: macos-amd64
+  - id: macos-x86-64
     env:
       - CGO_ENABLED=0
     goos:
@@ -45,8 +45,8 @@ archives:
       386: i386
       amd64: x86_64
   - builds:
-    - macos-amd64
-    id: macos-amd64-zip
+    - macos-x86-64
+    id: macos-x86-64-zip
     format: zip
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     replacements:
@@ -62,9 +62,9 @@ archives:
 checksum:
   name_template: 'checksums.txt'
 signs:
-  - id: macos-amd64
+  - id: macos-x86-64
     ids:
-      - macos-amd64-zip
+      - macos-x86-64-zip
     cmd: gon
     args:
       - .gon.x86_64.hcl
