@@ -1,7 +1,4 @@
-source = [
-  "./dist/saturn-L2-node-macos_darwin_amd64_v1/saturn-L2-node",
-  "./dist/saturn-L2-node-macos_darwin_arm64/saturn-L2-node"
-]
+source = ["./dist/macos_darwin_amd64/saturn-L2-node"]
 bundle_id = "saturn.filecoin.l2-node"
 
 apple_id {
@@ -14,5 +11,10 @@ sign {
 }
 
 zip {
-  output_path="./dist/saturn-L2-node.zip"
+  output_path="./dist/saturn-L2-node_macos.zip"
+}
+
+dmg {
+  output_path="./dist/saturn-L2-node_macos.dmg"
+  volume_name="saturn-L2-node"
 }

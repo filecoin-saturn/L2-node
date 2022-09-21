@@ -1,62 +1,55 @@
-# This is an example .goreleaser.yml file with some sensible defaults.
-# Make sure to check the documentation at https://goreleaser.com
+env:
+  - GO111MODULE=on
+
 before:
   hooks:
     # You may remove this if you don't use go modules.
     - go mod tidy
     # you may remove this if you don't need go generate
     - go generate ./...
+
 builds:
-  - binary: saturn-L2-node
-    id: saturn-L2-node
-    goos:
-      - linux
-      - windows
-    ignore:
-    - goos: windows
-      goarch: arm64
-    main: ./cmd/saturn-l2
+  - id: macos
     env:
       - CGO_ENABLED=0
-  - binary: saturn-L2-node
-    id: saturn-L2-node-macos
     goos:
-    - darwin
+      - darwin
+    goarch:
+      - amd64
     main: ./cmd/saturn-l2
-    env:
-      - CGO_ENABLED=0
-signs:
-  - ids:
-      - saturn-L2-node-macos
-    cmd: gon
-    args:
-    - .gon.hcl
-    artifacts: all
 
 archives:
-  - replacements:
-      darwin: Darwin
-      linux: Linux
-      windows: Windows
-      386: i386
+  - id: macos-zip
+    format: zip
+    name_template: "{{ .ProjectName }}_{{ .Os }}"
+    replacements:
+      darwin: macos
       amd64: x86_64
+
 checksum:
-  name_template: 'checksums.txt'
+  disable: true
+
+signs:
+  - signature: "${artifact}_macos.dmg"
+    ids:
+      - macos-zip
+    cmd: gon
+    args:
+      - .gon.hcl
+    artifacts: all
+
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  name_template: "{{ .Tag }}-next"
+
 changelog:
   sort: asc
-  groups:
-    - title: Features
-      regexp: "^.*feat[(\\w)]*:+.*$"
-      order: 0
-    - title: 'Bug fixes'
-      regexp: "^.*fix[(\\w)]*:+.*$"
-      order: 1
-    - title: Others
-      order: 999
   filters:
     exclude:
-      - '^docs:'
-      - '^test:'
+    - 'README'
 
+release:
+  ids:
+    - none
+  extra_files:
+    - glob: ./dist/gon_macos.dmg
+    - glob: ./dist/gon_macos.zip
