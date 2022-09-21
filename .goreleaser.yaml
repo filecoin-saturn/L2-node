@@ -36,6 +36,7 @@ archives:
     builds:
     - saturn
   - id: macos-zip
+    # apple signs zip,dmg,pkg but not tar.gz
     format: zip
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     replacements:
