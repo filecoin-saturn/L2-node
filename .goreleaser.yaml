@@ -65,9 +65,7 @@ signs:
   - id: macos-x86-64
     ids:
       - macos-x86-64-zip
-    cmd: gon
-    args:
-      - .gon.x86_64.hcl
+    cmd: ./sign-arm.sh
     artifacts: all
   - id: macos-arm64
     ids:
