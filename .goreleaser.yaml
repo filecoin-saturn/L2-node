@@ -72,7 +72,7 @@ signs:
   - id: macos-arm64
     ids:
       - macos-arm64-zip
-    cmd: sign-arm.sh
+    cmd: ./sign-arm.sh
     artifacts: all
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
