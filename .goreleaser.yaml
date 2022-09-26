@@ -65,7 +65,7 @@ signs:
   - id: macos-x86-64
     ids:
       - macos-x86-64-zip
-    cmd: ./sign-arm.sh
+    cmd: ./sign-x86_64.sh
     artifacts: all
   - id: macos-arm64
     ids:
