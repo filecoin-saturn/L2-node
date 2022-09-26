@@ -26,15 +26,6 @@ builds:
     goarch:
       - amd64
     main: ./cmd/saturn-l2
-  - id: macos-arm64
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - darwin
-    goarch:
-      - arm64
-    main: ./cmd/saturn-l2
-
 archives:
   - builds:
     - saturn
@@ -52,25 +43,15 @@ archives:
     replacements:
       darwin: Darwin
       amd64: x86_64
-  - builds:
-    - macos-arm64
-    id: macos-arm64-zip
-    format: zip
-    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
-    replacements:
-      darwin: Darwin
 checksum:
   name_template: 'checksums.txt'
 signs:
   - id: macos-x86-64
     ids:
       - macos-x86-64-zip
-    cmd: ./sign-x86_64.sh
-    artifacts: all
-  - id: macos-arm64
-    ids:
-      - macos-arm64-zip
-    cmd: ./sign-arm.sh
+    cmd: gon
+    args:
+      - .gon.hcl
     artifacts: all
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
