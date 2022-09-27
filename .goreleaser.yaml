@@ -7,27 +7,52 @@ before:
     # you may remove this if you don't need go generate
     - go generate ./...
 builds:
-  - env:
+  - id: saturn
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
       - windows
-      - darwin
     ignore:
     - goos: windows
       goarch: arm64
     main: ./cmd/saturn-l2
     binary: saturn-L2-node
-
+  - id: macos-x86-64
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+    main: ./cmd/saturn-l2
 archives:
-  - replacements:
-      darwin: Darwin
+  - builds:
+    - saturn
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    replacements:
       linux: Linux
       windows: Windows
       386: i386
       amd64: x86_64
+  - builds:
+    - macos-x86-64
+    id: macos-x86-64-zip
+    format: zip
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    replacements:
+      darwin: Darwin
+      amd64: x86_64
 checksum:
   name_template: 'checksums.txt'
+signs:
+  - id: macos-x86-64
+    ids:
+      - macos-x86-64-zip
+    cmd: gon
+    args:
+      - .gon.hcl
+    artifacts: all
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
 changelog:
@@ -45,4 +70,3 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
-
