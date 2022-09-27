@@ -1,5 +1,5 @@
 source = ["./dist/macos-x86-64_darwin_amd64_v1/L2-node"]
-bundle_id = "saturn.filecoin.l2-node"
+bundle_id = "io.filecoin.saturn.l2-node"
 
 apple_id {
   username = "oli@protocol.ai"
