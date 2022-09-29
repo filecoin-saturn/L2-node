@@ -26,6 +26,14 @@ builds:
     goarch:
       - amd64
     main: ./cmd/saturn-l2
+  - id: macos-arm64
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    main: ./cmd/saturn-l2
 archives:
   - builds:
     - saturn
@@ -43,6 +51,13 @@ archives:
     replacements:
       darwin: Darwin
       amd64: x86_64
+  - builds:
+    - macos-arm64
+    id: macos-arm64-zip
+    format: zip
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    replacements:
+      darwin: Darwin
 checksum:
   name_template: 'checksums.txt'
 signs:
@@ -52,6 +67,26 @@ signs:
     cmd: gon
     args:
       - .gon.hcl
+    artifacts: all
+  - id: macos-arm64
+    ids:
+      - macos-arm64-zip
+    signature: "${artifact}"
+    cmd: xcrun
+    args:
+      [
+        "notarytool",
+        "submit",
+        "./dist/L2-node_Darwin_arm64.zip",
+        "--apple-id",
+        oli@protocol.ai",
+        "--password",
+        "{{ .Env.AC_PASSWORD }}",
+        "--team-id",
+        "{{ .Env.AC_TEAM_ID }}",
+        "--progress",
+        "--wait",
+      ]
     artifacts: all
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
