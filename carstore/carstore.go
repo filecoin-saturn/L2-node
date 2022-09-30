@@ -43,7 +43,9 @@ var (
 	maxConcurrentReadyFetches = 3
 	secondMissDuration        = 24 * time.Hour
 	maxRecoverAttempts        = uint64(1)
-	defaultDownloadTimeout    = 20 * time.Minute
+	defaultDownloadTimeout    = 45 * time.Minute
+	nConcurrentDownloads      = 3
+	nMaxCacheMissBuffer       = 20
 )
 
 var (
@@ -57,6 +59,11 @@ type Config struct {
 	// defaults to 200 Gib
 	MaxCARFilesDiskSpace int64
 	DownloadTimeout      time.Duration
+}
+
+type cacheMissReq struct {
+	reqId uuid.UUID
+	root  cid.Cid
 }
 
 type CarStore struct {
@@ -78,6 +85,9 @@ type CarStore struct {
 
 	transientsDir   string
 	downloadTimeout time.Duration
+
+	cacheMissBuffer    chan cacheMissReq
+	cacheMissSemaphore chan struct{}
 }
 
 func New(rootDir string, gwAPI GatewayAPI, cfg Config, logger *logs.SaturnLogger) (*CarStore, error) {
@@ -153,6 +163,9 @@ func New(rootDir string, gwAPI GatewayAPI, cfg Config, logger *logs.SaturnLogger
 		logger:             logger.Subsystem("car-store"),
 		transientsDir:      transientsDir,
 		downloadTimeout:    downloadTimeout,
+
+		cacheMissBuffer:    make(chan cacheMissReq, nMaxCacheMissBuffer),
+		cacheMissSemaphore: make(chan struct{}, nConcurrentDownloads),
 	}, nil
 }
 
@@ -168,6 +181,9 @@ func (cs *CarStore) Start(ctx context.Context) error {
 
 	cs.wg.Add(1)
 	go cs.traceLoop()
+
+	cs.wg.Add(1)
+	go cs.cacheMissLoop()
 
 	err := cs.dagst.Start(ctx)
 	if err == nil {
@@ -206,8 +222,9 @@ func (cs *CarStore) gcTraceLoop() {
 	for {
 		select {
 		case res := <-cs.gcCh:
-			log.Debugw("shard reclaimed by automated gc", "shard", res.ReclaimedShard,
-				"disk-size-after-reclaim", res.TransientsDirSizeAfterReclaim, "disk-size-before-reclaim", res.TransientsDirSizeBeforeReclaim)
+			log.Infow("shard reclaimed by automated gc", "shard", res.ReclaimedShard,
+				"disk-size-after-reclaim", res.TransientsDirSizeAfterReclaim, "disk-size-before-reclaim", res.TransientsDirSizeBeforeReclaim,
+				"accounted-before", res.TransientsAccountingBeforeReclaim, "accounted-after", res.TransientsAccountingAfterReclaim)
 		case <-cs.ctx.Done():
 			return
 		}
@@ -245,6 +262,7 @@ func (cs *CarStore) FetchAndWriteCAR(reqID uuid.UUID, root cid.Cid, writer func(
 	}
 
 	if err == nil && len(sks) != 0 {
+		cs.logger.Infow(reqID, "found shards containing the requested cid")
 		var sa *dagstore.ShardAccessor
 
 		// among all the shards that have the requested root, select the first shard that we already have the CAR for locally.
@@ -263,7 +281,15 @@ func (cs *CarStore) FetchAndWriteCAR(reqID uuid.UUID, root cid.Cid, writer func(
 		// and return not found here.
 		if sa == nil {
 			cs.logger.Infow(reqID, "failed to acquire shard with nodownload=true, will execute the cache miss code", "err", err)
-			cs.executeCacheMiss(reqID, root)
+			// block and backpressure the L1 if we have too many concurrent downloads
+			select {
+			case cs.cacheMissBuffer <- cacheMissReq{reqId: reqID, root: root}:
+				cs.logger.Infow(reqID, "queued to cache miss buffer")
+			case <-cs.ctx.Done():
+				return cs.ctx.Err()
+			default:
+				cs.logger.Infow(reqID, "dropping cache miss request as no space in buffer")
+			}
 			return ErrNotFound
 		}
 		defer sa.Close()
@@ -279,10 +305,31 @@ func (cs *CarStore) FetchAndWriteCAR(reqID uuid.UUID, root cid.Cid, writer func(
 		return writer(&blockstore{bs})
 	}
 
-	// we don't have the requested CAR -> apply "cache on second miss" rule
-	cs.executeCacheMiss(reqID, root)
+	// do not execute the cache miss if we don't have the capacity to do so
+	select {
+	case cs.cacheMissBuffer <- cacheMissReq{reqId: reqID, root: root}:
+		cs.logger.Infow(reqID, "queued to cache miss buffer")
+	case <-cs.ctx.Done():
+		return cs.ctx.Err()
+	default:
+		cs.logger.Infow(reqID, "dropping cache miss request as no space in buffer")
+	}
 
 	return ErrNotFound
+}
+
+func (cs *CarStore) cacheMissLoop() {
+	defer cs.wg.Done()
+
+	for {
+		select {
+		case req := <-cs.cacheMissBuffer:
+			cs.logger.Infow(req.reqId, "dequeued request from cache miss buffer")
+			cs.executeCacheMiss(req.reqId, req.root)
+		case <-cs.ctx.Done():
+			return
+		}
+	}
 }
 
 func (cs *CarStore) executeCacheMiss(reqID uuid.UUID, root cid.Cid) {
@@ -313,21 +360,34 @@ func (cs *CarStore) executeCacheMiss(reqID uuid.UUID, root cid.Cid) {
 	mnt := &GatewayMount{RootCID: root, API: cs.gwAPI}
 	cs.downloading[mhkey] = struct{}{}
 
-	go func(mhkey string) {
-		ctx, cancel := context.WithDeadline(cs.ctx, time.Now().Add(cs.downloadTimeout))
-		defer cancel()
-		sa, err := helpers.RegisterAndAcquireSync(ctx, cs.dagst, keyFromCIDMultihash(root), mnt, dagstore.RegisterOpts{}, dagstore.AcquireOpts{})
-		if err == nil {
-			cs.logger.Infow(reqID, "successfully downloaded and cached given root")
-			sa.Close()
-		} else {
-			cs.logger.LogError(reqID, "download failed as failed to register/acquire shard", err)
-		}
+	select {
+	case cs.cacheMissSemaphore <- struct{}{}:
+		cs.logger.Infow(reqID, "acquired cache miss semaphore")
+		cs.wg.Add(1)
+		go func(mhkey string) {
+			defer func() {
+				<-cs.cacheMissSemaphore
+				cs.logger.Infow(reqID, "released cache miss semaphore")
+				cs.mu.Lock()
+				delete(cs.downloading, mhkey)
+				cs.mu.Unlock()
+				cs.wg.Done()
+			}()
 
-		cs.mu.Lock()
-		delete(cs.downloading, mhkey)
-		cs.mu.Unlock()
-	}(mhkey)
+			ctx, cancel := context.WithDeadline(cs.ctx, time.Now().Add(cs.downloadTimeout))
+			defer cancel()
+			sa, err := helpers.RegisterAndAcquireSync(ctx, cs.dagst, keyFromCIDMultihash(root), mnt, dagstore.RegisterOpts{}, dagstore.AcquireOpts{})
+			if err == nil {
+				cs.logger.Infow(reqID, "successfully downloaded and cached given root")
+				sa.Close()
+			} else {
+				cs.logger.LogError(reqID, "download failed as failed to register/acquire shard", err)
+			}
+
+		}(mhkey)
+	case <-cs.ctx.Done():
+		return
+	}
 }
 
 func (cs *CarStore) Stat() (station.StorageStats, error) {

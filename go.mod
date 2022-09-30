@@ -3,7 +3,7 @@ module github.com/filecoin-project/saturn-l2
 go 1.18
 
 require (
-	github.com/filecoin-project/dagstore v0.5.3-0.20220920122009-a359291f19ff
+	github.com/filecoin-project/dagstore v0.5.3-0.20220930091127-95a7d39bc17e
 	github.com/filecoin-project/go-address v1.0.0
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.7.4
