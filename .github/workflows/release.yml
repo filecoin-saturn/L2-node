@@ -2,9 +2,6 @@ name: goreleaser
 
 on:
   push:
-    # run only against tags
-    tags:
-      - '*'
 
 permissions:
   contents: write
@@ -13,7 +10,7 @@ permissions:
 
 jobs:
   goreleaser:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       -
         name: Checkout
@@ -29,6 +26,7 @@ jobs:
           tag: v0.0.19
           fileName: saturn-webui.tar.gz
           out-file-path: resources/webui
+          token: ${{ secrets.GITHUB_TOKEN }}
       -
         name: Unpack web UI archive
         run: |
@@ -44,6 +42,33 @@ jobs:
         with:
           go-version: 1.18
       -
+        name: Install gon
+        run: |
+          brew tap mitchellh/gon
+          brew install mitchellh/gon/gon
+      -
+        name: Install the Apple certificate and provisioning profile
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          # create variables
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          # import certificate and provisioning profile from secrets
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode --output $CERTIFICATE_PATH
+
+          # create temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # import certificate to keychain
+          security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+      -
         name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v2
         with:
@@ -53,5 +78,13 @@ jobs:
           args: release --rm-dist
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AC_PASSWORD: ${{ secrets.AC_PASSWORD }}
           # Your GoReleaser Pro key, if you are using the 'goreleaser-pro' distribution
           # GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+      -
+        name: Attach produced packages to Github Action
+        uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: dist/*.*
+          if-no-files-found: error
