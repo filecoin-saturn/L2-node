@@ -70,16 +70,6 @@ func TestSimpleTransfer(t *testing.T) {
 	require.EqualValues(t, contents, bz)
 
 	csh.assertStationStats(t, ctx, len(contents), len(contents), 3, 0, len(contents), 2, 1)
-
-	// send request with the skip param
-	reqBz = mkRequestWithoutSelector(t, root, 101)
-	resp = sendHttpReq(t, url, reqBz)
-	require.EqualValues(t, http.StatusOK, resp.StatusCode)
-
-	bz = readHTTPResponse(t, resp)
-	require.EqualValues(t, contents[101:], bz)
-
-	csh.assertStationStats(t, ctx, len(contents)+len(contents)-101, len(contents), 4, 0, len(contents), 2, 2)
 }
 
 func TestParallelTransfers(t *testing.T) {

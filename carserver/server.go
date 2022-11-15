@@ -45,7 +45,7 @@ func (l *CarServer) ServeCARFile(ctx context.Context, dr *types.DagTraversalRequ
 		bsa := bsadapter.Adapter{Wrapped: ro}
 		ls.SetReadStorage(&bsa)
 
-		_, err := car.TraverseV1(ctx, &ls, dr.Root, dr.Selector, sw, car.WithSkipOffset(dr.SkipOffset))
+		_, err := car.TraverseV1(ctx, &ls, dr.Root, dr.Selector, sw)
 		if err != nil {
 			l.logger.LogError(dr.RequestId, "car traversal failed", err)
 			return fmt.Errorf("car traversal failed: %w", err)
