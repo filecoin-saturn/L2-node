@@ -112,7 +112,7 @@ var (
 	idleL1ConnTimeout = 30 * time.Minute
 
 	// DNS Hostname of Saturn L1 Nodes for the L1 Test network.
-	saturn_l1_hostName = "saturn-test.network"
+	saturn_l1_hostName = "strn-test.pl"
 
 	defaultL1DiscoveryURL = "https://orchestrator.saturn-test.network/nodes/nearby"
 
