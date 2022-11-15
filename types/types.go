@@ -34,16 +34,14 @@ func (c *CARTransferRequest) ToDAGRequest() (*DagTraversalRequest, error) {
 	}
 
 	return &DagTraversalRequest{
-		RequestId:  reqId,
-		Root:       rootCid,
-		Selector:   sel,
-		SkipOffset: c.SkipOffset,
+		RequestId: reqId,
+		Root:      rootCid,
+		Selector:  sel,
 	}, nil
 }
 
 type DagTraversalRequest struct {
-	RequestId  uuid.UUID
-	Root       cid.Cid
-	SkipOffset uint64
-	Selector   ipld.Node
+	RequestId uuid.UUID
+	Root      cid.Cid
+	Selector  ipld.Node
 }
