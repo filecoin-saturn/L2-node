@@ -114,7 +114,7 @@ var (
 	// DNS Hostname of Saturn L1 Nodes for the L1 Test network.
 	saturn_l1_hostName = "strn-test.pl"
 
-	defaultL1DiscoveryURL = "https://orchestrator.saturn-test.network/nodes/nearby"
+	defaultL1DiscoveryURL = "https://orchestrator.strn-test.pl/nodes/nearby"
 
 	checkL1ConnectivityInterval = 5 * time.Second
 
