@@ -410,9 +410,6 @@ func mkConfig() (config, error) {
 	if err != nil {
 		return config{}, fmt.Errorf("failed to parse max disk space env var: %w", err)
 	}
-	if maxDiskSpace < defaultMaxDiskSpace {
-		return config{}, errors.New("max allocated disk space should be atleast 200GiB")
-	}
 
 	// parse root directory
 	rootDirStr, err := getRootDir()

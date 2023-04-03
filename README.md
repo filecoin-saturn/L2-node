@@ -110,7 +110,7 @@ At present, the L2 implementation has the following features:
    3. `MAX_L2_DISK_SPACE`
        MAX_L2_DISK_SPACE is the environment variable that determines the maximum disk space the L2 node
        can use to store cached CAR files. If this env variable is not configured, it defaults to 200GiB.
-       Note: The configured value should be greater than or equal to 200Gib.
+       Note: For efficient operation, the configured value should be greater than or equal to 200Gib.
 
    4. `FIL_WALLET_ADDRESS`
        FIL_WALLET_ADDRESS is the environment variable that determines the Filecoin wallet address of the L2 user.
