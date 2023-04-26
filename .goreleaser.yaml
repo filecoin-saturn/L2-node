@@ -26,6 +26,7 @@ builds:
     goarch:
       - amd64
     main: ./cmd/saturn-l2
+    binary: saturn-L2-node
 archives:
   - builds:
     - saturn
