@@ -44,6 +44,12 @@ import (
 	"github.com/filecoin-project/saturn-l2/resources"
 )
 
+type L1Addr struct {
+	Id       string  `json:"id"`
+	Ip       string  `json:"ip"`
+	Distance float64 `json:"distance"`
+	Weight   uint64  `json:"weight"`
+}
 type L1IPAddrs []string
 
 var log = logging.Logger("saturn-l2")
@@ -114,7 +120,7 @@ var (
 	// DNS Hostname of Saturn L1 Nodes for the L1 Test network.
 	saturn_l1_hostName = "strn-test.pl"
 
-	defaultL1DiscoveryURL = "https://orchestrator.strn-test.pl/nodes/nearby"
+	defaultL1DiscoveryURL = "https://orchestrator.strn-test.pl/nodes"
 
 	checkL1ConnectivityInterval = 5 * time.Second
 
@@ -527,6 +533,7 @@ func getNearestL1sWithRetry(ctx context.Context, cfg config, maxL1DiscoveryAttem
 }
 
 func getNearestL1s(ctx context.Context, cfg config) (L1IPAddrs, error) {
+	l1IPAddrs := []string{}
 	client := &http.Client{
 		Timeout: l1_discovery_timeout,
 	}
@@ -544,20 +551,21 @@ func getNearestL1s(ctx context.Context, cfg config) (L1IPAddrs, error) {
 	defer resp.Body.Close()
 
 	rd := io.LimitReader(resp.Body, maxL1DiscoveryResponseSize)
-	l1ips, err := io.ReadAll(rd)
+	l1addrs, err := io.ReadAll(rd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read l1 discovery response: %w", err)
 	}
 
-	var l1IPAddrs []string
-	if err := json.Unmarshal(l1ips, &l1IPAddrs); err != nil {
+	var l1Addrs []L1Addr
+	if err := json.Unmarshal(l1addrs, &l1Addrs); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal l1 addresses: %w", err)
 	}
 
-	for _, s := range l1IPAddrs {
-		if ip := net.ParseIP(s); ip == nil {
+	for _, s := range l1Addrs {
+		if ip := net.ParseIP(s.Ip); ip == nil {
 			return nil, fmt.Errorf("l1 IP returned by L1 Discovery API is invalid, ip=%s", ip)
 		}
+		l1IPAddrs = append(l1IPAddrs, s.Ip)
 	}
 
 	if cfg.MaxL1Connections < len(l1IPAddrs) {

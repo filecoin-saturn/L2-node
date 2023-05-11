@@ -119,7 +119,7 @@ At present, the L2 implementation has the following features:
    5. `L1_DISCOVERY_API_URL`
        L1_DISCOVERY_API_URL is the environment variable that determines the URL of the L1 Discovery API to invoke to
        get back the L1 nodes this L2 node will connect and serve CAR files to. For the production environment, this is currently 
-       https://orchestrator.strn.pl/nodes/nearby. However, please note that no default has currently been configured for this variable.
+       https://orchestrator.strn.pl/nodes.
   
    6. `MAX_L1s`
        MAX_L1s is the environment variable that determines the maximum number of L1s this L2 will connect to and join the swarm for. 
