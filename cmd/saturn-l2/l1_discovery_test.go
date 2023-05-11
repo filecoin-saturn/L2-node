@@ -11,16 +11,31 @@ import (
 )
 
 var (
-	ip1 = "1.1.1.1"
-	ip2 = "2.2.2.2"
-	ip3 = "3.3.3.3"
+	addr1 = &L1Addr{
+		Id:       "1",
+		Ip:       "1.1.1.1",
+		Distance: 1.0,
+		Weight:   1,
+	}
+	addr2 = &L1Addr{
+		Id:       "2",
+		Ip:       "2.2.2.2",
+		Distance: 1.0,
+		Weight:   1,
+	}
+	addr3 = &L1Addr{
+		Id:       "3",
+		Ip:       "3.3.3.3",
+		Distance: 1.0,
+		Weight:   1,
+	}
 )
 
 func TestL1Discovery(t *testing.T) {
 	ctx := context.Background()
 	svc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ips := []string{ip1, ip2, ip3}
-		bz, _ := json.Marshal(ips)
+		addrs := []L1Addr{*addr1, *addr2, *addr3}
+		bz, _ := json.Marshal(addrs)
 
 		_, err := w.Write(bz)
 		if err != nil {
@@ -40,7 +55,7 @@ func TestL1Discovery(t *testing.T) {
 	l1s, err = getNearestL1sWithRetry(ctx, cfg, 1)
 	require.NoError(t, err)
 	require.Len(t, l1s, 1)
-	require.EqualValues(t, ip1, l1s[0])
+	require.EqualValues(t, addr1.Ip, l1s[0])
 }
 
 func TestL1DiscoveryFailure(t *testing.T) {
