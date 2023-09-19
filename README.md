@@ -2,7 +2,6 @@
 
 The Saturn L2 Node is a CDN node for the Saturn network that fetches and caches/persists IPLD Dags serialised as CAR files. It fetches CAR files from origin servers that can serve IPLD data such as the IPFS Gateway and Filecoin SPs.
 
-
 The L2 node is meant to run on NATT'd home machines. This means that the L2 implementation needs to account for:
 
 1. Limited disk space available for caching CAR files -> we should never exceed the limit set by the home user.
@@ -10,7 +9,7 @@ The L2 node is meant to run on NATT'd home machines. This means that the L2 impl
 3. L2's will be NATT'd and not reachable from the public internet.
 4. L2's will have flaky connectivity.
 
-We've documented the important considerations and design of the L2 node that will allows us to build a reliable, low latency and high bandwidth CDN abstraction on top of these resource contrained homne machines with flaky connectivity at https://pl-strflt.notion.site/Building-the-Saturn-L2-network-and-L1-L2-interplay-6518deda51344a9db04bd3037b270ada.
+We've documented the important considerations and design of the L2 node that will allow us to build a reliable, low latency and high bandwidth CDN abstraction on top of these resource constrained home machines with flaky connectivity at https://pl-strflt.notion.site/Building-the-Saturn-L2-network-and-L1-L2-interplay-6518deda51344a9db04bd3037b270ada.
 
 The document also details the implementation path we will be taking to eventually build a robust and feature complete MVP for the Saturn L2.
 
@@ -46,13 +45,13 @@ At present, the L2 implementation has the following features:
 
 - On every startup, the L2 node connects to the configured L1 Discovery API (See the `L1_DISCOVERY_API_URL` environment variable below) to get back a list of L1 nodes to connect to.
 
-- The L2 node then picks a maximum of `MAX_L1s`(configurable) L1s from those recieved from the Discovery API and joins
+- The L2 node then picks a maximum of `MAX_L1s`(configurable) L1s from those received from the Discovery API and joins
   the "swarm" for all those L1s.
 
-   - The L2 node joins an L1's Swarm by invoking the GET `https://{L1_IP}/register/{L2Id}` registration API on the L1. The L1 should send back a 200     status code and then keep the connection alive. 
-   - The L2 node then starts reading requests for CAR files from the response stream of the registration call made above. The L1 should send a request as      new line delimited json. The request is currently of the form:
+   - The L2 node joins an L1's Swarm by invoking the GET `https://{L1_IP}/register/{L2Id}` registration API on the L1. The L1 should send back a 200 status code and then keep the connection alive. 
+   - The L2 node then starts reading requests for CAR files from the response stream of the registration call made above. The L1 should send a request as new line delimited json. The request is currently of the form:
 
-     ```
+     ```go
      type CARTransferRequest struct {
 	      RequestId  string
 	      Root       string
@@ -60,11 +59,11 @@ At present, the L2 implementation has the following features:
      } 
      ```
    - For each request, the L2 node serves the CAR file by invoking the POST `https://{L1_IP}/data/{Root}/{RequestId}` API on the L1.
-     The L2 will serve the CAR file only if it already has it. The L2 makes no guaruantees of sending back a POST response for each request recieved from an L1.
+     The L2 will serve the CAR file only if it already has it. The L2 makes no guarantees of sending back a POST response for each request recieved from an L1.
      If an L2 does not have a CAR file or if there's an error while serving the CAR file, the L2 will simply not send a POST or send some
-     invalid bytes(incomplete CAR file) in the POST. The L1 should always ensure that a CAR file stream sent over POST ends with an `EOF` to ensure it has      read a complete valid CAR file.     
-   - The number of concurrent requests that an L2 will serve for an L1 is configured using the `MAX_CONCURRENT_L1_REQUESTS` environment variable described      below.
-   - **Note**: The L2 node also ships with an upper bound on the number of connections it makes to a single L1(5 for now) to prevent abuse. Connections will        be re-used to send responses for subsequent requests after an L1 has finished reading and closed the stream for an existing response over the              connection. If all connections are busy with ongoing responses, subsequent responses will block till a connection is available.
+     invalid bytes(incomplete CAR file) in the POST. The L1 should always ensure that a CAR file stream sent over POST ends with an `EOF` to ensure it has read a complete valid CAR file.     
+   - The number of concurrent requests that an L2 will serve for an L1 is configured using the `MAX_CONCURRENT_L1_REQUESTS` environment variable described below.
+   - **Note**: The L2 node also ships with an upper bound on the number of connections it makes to a single L1(5 for now) to prevent abuse. Connections will be re-used to send responses for subsequent requests after an L1 has finished reading and closed the stream for an existing response over the connection. If all connections are busy with ongoing responses, subsequent responses will block till a connection is available.
   
 
 - If an L2 does not have the requested DAG, it simply returns a 404 so the client can fetch it directly from the IPFS Gateway. This decision was taken keeping in mind that it will be faster for the client to fetch the content directly from the IPFS Gateway rather than the client downloading it from the L2 which is itself downloading the content from the IPFS Gateway. This is because the L2 clients i.e. L1 Saturn nodes have significantly superior bandwidth compared to L2s. Low L2 uplink speeds without the benefits of geo-location and without the implementation of multi-peer L2 downloads can definitely become a bottleneck for L1s in the L2 cache miss scenario.
@@ -74,13 +73,13 @@ At present, the L2 implementation has the following features:
 ## Setting up the L2 node and invoking the HTTP APIs
 
 1. Build and Install the Saturn L2 binary located at cmd/saturn-l2.
-   ```
+   ```bash
    cd cmd/saturn-l2
    go build ./...
    ```
 
 2. Run the saturn-l2 binary
-   ```
+   ```bash
    cd cmd/saturn-l2
    ./saturn-l2
    ```
@@ -117,17 +116,14 @@ At present, the L2 implementation has the following features:
        Note: This is a mandatory environment variable -> no default.
 
    5. `L1_DISCOVERY_API_URL`
-       L1_DISCOVERY_API_URL is the environment variable that determines the URL of the L1 Discovery API to invoke to
-       get back the L1 nodes this L2 node will connect and serve CAR files to. For the production environment, this is currently 
-       https://orchestrator.strn.pl/nodes.
+       L1_DISCOVERY_API_URL is the environment variable that determines the URL of the L1 Discovery API to invoke to get back the L1 nodes this L2 node will connect and serve CAR files to. For the production environment, this is currently https://orchestrator.strn.pl/nodes.
   
    6. `MAX_L1s`
-       MAX_L1s is the environment variable that determines the maximum number of L1s this L2 will connect to and join the swarm for. 
+       MAX_L1s is the environment variable that determines the maximum number of L1s this L2 will connect to and join the swarm for.
        Defaults to 100. 
 
    7. `MAX_CONCURRENT_L1_REQUESTS`
-       MAX_CONCURRENT_L1_REQUESTS is the environment variable that determines the maximum number of requests that will be 
-       processed concurrently for a single L1. Defaults to 3. 
+       MAX_CONCURRENT_L1_REQUESTS is the environment variable that determines the maximum number of requests that will be processed concurrently for a single L1. Defaults to 3. 
 
 
 3. One the binary starts, it will print this to the standard output:
@@ -198,5 +194,3 @@ Replace vA.B.C with the actual version number, and please follow
 [Semantic Versioning](https://semver.org).
 
 You can omit `-s` if you are not signing your commits.
-
-
