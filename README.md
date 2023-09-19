@@ -51,7 +51,7 @@ At present, the L2 implementation has the following features:
    - The L2 node joins an L1's Swarm by invoking the GET `https://{L1_IP}/register/{L2Id}` registration API on the L1. The L1 should send back a 200 status code and then keep the connection alive. 
    - The L2 node then starts reading requests for CAR files from the response stream of the registration call made above. The L1 should send a request as new line delimited json. The request is currently of the form:
 
-     ```
+     ```go
      type CARTransferRequest struct {
 	      RequestId  string
 	      Root       string
